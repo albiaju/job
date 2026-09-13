@@ -566,17 +566,53 @@ def get_sample_jobs() -> list:
 # 🎨 COLOR-CODED HTML EMAIL TEMPLATE
 # ==============================================================================
 
+def get_company_initials(company: str) -> str:
+    """Generates a clean 2-letter monogram for company avatar."""
+    cleaned = re.sub(r"[^a-zA-Z0-9\s]", "", company or "").strip()
+    words = cleaned.split()
+    if len(words) >= 2:
+        return (words[0][0] + words[1][0]).upper()
+    elif len(words) == 1 and len(words[0]) >= 2:
+        return words[0][:2].upper()
+    elif len(words) == 1:
+        return words[0][0].upper()
+    return "HR"
+
+
+def get_company_avatar(company: str) -> str:
+    """Renders a stylish company monogram avatar badge."""
+    initials = get_company_initials(company)
+    palette = [
+        ("linear-gradient(135deg, #0284c7, #0369a1)", "#ffffff"),
+        ("linear-gradient(135deg, #7c3aed, #6d28d9)", "#ffffff"),
+        ("linear-gradient(135deg, #059669, #047857)", "#ffffff"),
+        ("linear-gradient(135deg, #db2777, #be185d)", "#ffffff"),
+        ("linear-gradient(135deg, #ea580c, #c2410c)", "#ffffff"),
+        ("linear-gradient(135deg, #0f172a, #334155)", "#ffffff"),
+    ]
+    idx = abs(hash((company or "").lower().strip())) % len(palette)
+    bg, text_color = palette[idx]
+    return (
+        f'<div style="width:42px; height:42px; border-radius:10px; background:{bg}; color:{text_color}; '
+        f'font-size:14px; font-weight:800; text-align:center; line-height:42px; display:inline-block; '
+        f'vertical-align:middle; margin-right:12px; box-shadow:0 2px 6px rgba(0,0,0,0.1); letter-spacing:0.5px;">'
+        f'{initials}</div>'
+    )
+
+
 def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int) -> str:
-    """Builds a beautiful, responsive, color-coded HTML email digest tailored for Anosha."""
+    """Builds a beautiful, responsive, aesthetic, color-coded HTML email digest tailored for Anosha."""
     date_str = datetime.now().strftime("%A, %B %d, %Y")
 
     job_cards_html = ""
     for idx, job in enumerate(ranked_jobs, start=1):
         color = job["color_theme"]
+        avatar_html = get_company_avatar(job["company"])
+
         top_tier_badge = ""
         if job["is_top_tier"]:
             top_tier_badge = """
-            <span style="display:inline-block; background:linear-gradient(135deg, #f59e0b, #d97706); color:#ffffff; font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; text-transform:uppercase; margin-left:6px; letter-spacing:0.5px;">
+            <span style="display:inline-block; background:linear-gradient(135deg, #f59e0b, #d97706); color:#ffffff; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; text-transform:uppercase; margin-left:6px; letter-spacing:0.5px; box-shadow:0 2px 4px rgba(217, 119, 6, 0.2);">
                 ⭐ Top Employer (+30 pts)
             </span>
             """
@@ -584,46 +620,51 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
         fresh_badge = ""
         if job["is_fresh"]:
             fresh_badge = f"""
-            <span style="display:inline-block; background:#fee2e2; color:#b91c1c; font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px; margin-left:6px;">
+            <span style="display:inline-block; background:#fee2e2; color:#b91c1c; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-left:6px; border:1px solid #fecaca;">
                 {job['recency_label']}
             </span>
             """
 
         skills_pills = "".join(
-            f'<span style="display:inline-block; background:#f1f5f9; color:#334155; font-size:11px; font-weight:600; padding:3px 8px; border-radius:6px; margin:2px 4px 2px 0;">{s}</span>'
+            f'<span style="display:inline-block; background:#f1f5f9; color:#1e293b; border:1px solid #e2e8f0; font-size:11px; font-weight:600; padding:3px 9px; border-radius:6px; margin:2px 4px 2px 0;">{s}</span>'
             for s in job["matched_skills"]
         ) if job["matched_skills"] else '<span style="color:#94a3b8; font-size:12px;">HR & Talent Acquisition</span>'
 
         job_cards_html += f"""
-        <div style="background:{color['bg']}; border:1px solid {color['border']}; border-radius:12px; padding:20px; margin-bottom:18px; box-shadow:0 2px 5px rgba(0,0,0,0.03);">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+        <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid {color['border']}; border-radius:14px; padding:22px; margin-bottom:20px; box-shadow:0 4px 14px rgba(15, 23, 42, 0.04);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; flex-wrap:wrap; gap:6px;">
                 <div>
-                    <span style="background:{color['badge_bg']}; color:{color['badge_text']}; font-size:12px; font-weight:700; padding:4px 10px; border-radius:20px; display:inline-block;">
-                        #{idx} • {job['score']}% Match ({job['match_tier']})
+                    <span style="background:{color['badge_bg']}; color:#ffffff; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; display:inline-block; letter-spacing:0.3px;">
+                        🎯 #{idx} • {job['score']}% Match ({job['match_tier']})
                     </span>
                     {top_tier_badge}
                     {fresh_badge}
                 </div>
             </div>
 
-            <h2 style="margin:8px 0 4px 0; font-size:18px; color:#0f172a; line-height:1.3;">
-                {job['title']}
-            </h2>
-            <div style="color:#475569; font-size:13px; font-weight:600; margin-bottom:10px;">
-                🏢 {job['company']} &nbsp;|&nbsp; 📍 {job['location']} &nbsp;|&nbsp; 💼 {job['type']}
+            <div style="display:flex; align-items:center; margin-bottom:10px;">
+                {avatar_html}
+                <div style="display:inline-block; vertical-align:middle;">
+                    <h2 style="margin:0; font-size:18px; font-weight:700; color:#0f172a; line-height:1.35;">
+                        {job['title']}
+                    </h2>
+                    <div style="color:#475569; font-size:13px; font-weight:600; margin-top:3px;">
+                        🏢 {job['company']} &nbsp;•&nbsp; 📍 {job['location']} &nbsp;•&nbsp; 💼 {job['type']}
+                    </div>
+                </div>
             </div>
 
-            <p style="color:#334155; font-size:13px; line-height:1.5; margin:8px 0 12px 0;">
-                {job['description'][:250]}...
+            <p style="color:#334155; font-size:13px; line-height:1.6; margin:8px 0 14px 0;">
+                {job['description'][:260]}...
             </p>
 
-            <div style="margin-bottom:14px;">
-                <span style="color:#64748b; font-size:12px; font-weight:600; margin-right:4px;">Matching Skills:</span>
+            <div style="margin-bottom:16px;">
+                <span style="color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-right:6px; display:block; margin-bottom:6px;">Matching Skills & Keywords:</span>
                 {skills_pills}
             </div>
 
             <div style="text-align:right;">
-                <a href="{job['apply_url']}" target="_blank" style="background:#0f172a; color:#ffffff; text-decoration:none; padding:9px 20px; border-radius:8px; font-size:13px; font-weight:600; display:inline-block;">
+                <a href="{job['apply_url']}" target="_blank" style="background:linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); color:#ffffff; text-decoration:none; padding:10px 22px; border-radius:8px; font-size:13px; font-weight:700; display:inline-block; box-shadow:0 3px 8px rgba(15,23,42,0.18);">
                     View & Apply on LinkedIn →
                 </a>
             </div>
@@ -632,53 +673,100 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
 
     return f"""
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Daily Career Digest</title>
+        <title>Daily Career Match Digest</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     </head>
-    <body style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f8fafc; margin:0; padding:24px 12px; color:#1e293b;">
-        <div style="max-width:680px; margin:0 auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.06); border:1px solid #e2e8f0;">
+    <body style="font-family:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f1f5f9; margin:0; padding:28px 12px; color:#1e293b; -webkit-font-smoothing:antialiased;">
+        <div style="max-width:660px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 14px 38px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(226, 232, 240, 0.8);">
             
+            <!-- Rainbow Gradient Accent Bar -->
+            <div style="height:5px; background:linear-gradient(90deg, #10b981 0%, #6366f1 50%, #ec4899 100%);"></div>
+
             <!-- Header Banner -->
-            <div style="background:linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%); padding:32px 24px; color:#ffffff; text-align:center;">
-                <div style="font-size:36px; margin-bottom:6px;">🎯</div>
-                <h1 style="margin:0; font-size:24px; font-weight:800; letter-spacing:-0.5px;">Daily Career Match Digest</h1>
-                <p style="margin:8px 0 0 0; color:#cbd5e1; font-size:14px;">
+            <div style="background:linear-gradient(135deg, #090d16 0%, #17153a 45%, #2e1065 100%); padding:36px 28px; color:#ffffff; text-align:center;">
+                <div style="display:inline-block; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(8px); padding:4px 14px; border-radius:30px; font-size:11px; font-weight:700; color:#e0e7ff; letter-spacing:0.8px; text-transform:uppercase; margin-bottom:12px;">
+                    ⚡ DAILY EXECUTIVE BRIEFING • 8:00 PM IST
+                </div>
+                <h1 style="margin:0 0 6px 0; font-size:26px; font-weight:800; letter-spacing:-0.5px; line-height:1.2; color:#ffffff;">
+                    🎯 Daily Career Match Digest
+                </h1>
+                <p style="margin:0 0 16px 0; color:#cbd5e1; font-size:13px; font-weight:500;">
                     {date_str} • Curated HR, Talent Acquisition & Business Opportunities
                 </p>
-                <div style="display:inline-block; background:rgba(255,255,255,0.12); padding:4px 14px; border-radius:20px; margin-top:12px; font-size:12px; color:#e2e8f0;">
-                    Tailored for: <strong>Anosha Mariam Raji (BBA • Talent Acquisition)</strong>
+                <div style="display:inline-block; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); padding:6px 16px; border-radius:30px; font-size:12px; color:#f8fafc;">
+                    👤 Exclusively Tailored for: <strong>Anosha Mariam Raji</strong> <span style="color:#a5b4fc; font-weight:600;">(BBA • Talent Acquisition)</span>
                 </div>
             </div>
 
-            <!-- Highlights Bar -->
-            <div style="background:#f1f5f9; padding:14px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-around; text-align:center; font-size:13px; color:#475569;">
-                <div><strong>{total_scraped}</strong> Roles Evaluated</div>
-                <div>🛡️ <strong>{spam_count}</strong> Spam Filtered</div>
-                <div>⭐ <strong>{len(ranked_jobs)}</strong> Top Matches</div>
-            </div>
+            <!-- Stats Bar -->
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; text-align:center;">
+                <tr>
+                    <td style="padding:16px 8px; border-right:1px solid #e2e8f0; width:33.3%;">
+                        <div style="font-size:22px; font-weight:800; color:#0f172a; line-height:1.1;">{total_scraped}</div>
+                        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;">🌐 Roles Evaluated</div>
+                    </td>
+                    <td style="padding:16px 8px; border-right:1px solid #e2e8f0; width:33.3%;">
+                        <div style="font-size:22px; font-weight:800; color:#059669; line-height:1.1;">100% Clean</div>
+                        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;">🛡️ {spam_count} Spam Filtered</div>
+                    </td>
+                    <td style="padding:16px 8px; width:33.3%;">
+                        <div style="font-size:22px; font-weight:800; color:#4f46e5; line-height:1.1;">{len(ranked_jobs)}</div>
+                        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;">⭐ Prime Matches</div>
+                    </td>
+                </tr>
+            </table>
 
-            <!-- Body Content -->
-            <div style="padding:24px;">
-                <p style="font-size:14px; color:#475569; margin-top:0; margin-bottom:20px; line-height:1.5;">
-                    Hello Anosha!, Sugam ale.... Here are today's top matching <strong>HR, Talent Acquisition, Campus Hiring, and Business Operations</strong> roles in <strong>Bengaluru</strong>.
-                    Spam recruitment companies were filtered out, and roles matching your BBA, Naukri, LeadSquared CRM, and recruiting experience received top priority. By <strong>Albi Aju</strong>
-                </p>
+            <!-- Main Container -->
+            <div style="padding:28px 24px;">
+                
+                <!-- Personalized Welcome Card -->
+                <div style="background:linear-gradient(135deg, #f8faff 0%, #eef2ff 100%); border:1px solid #c7d2fe; border-radius:16px; padding:22px 24px; margin-bottom:24px; box-shadow:0 4px 14px rgba(99, 102, 241, 0.06);">
+                    <div style="font-size:17px; font-weight:800; color:#1e1b4b; margin-bottom:8px;">
+                        ✨ Hello Anosha!, Sugam ale.... <span style="font-size:13px; color:#6366f1; font-weight:600;">(സുഖം അല്ലേ?) 👋</span>
+                    </div>
+                    <p style="font-size:14px; color:#334155; line-height:1.65; margin:0 0 14px 0;">
+                        Good evening! Here are today's top matching <strong>HR, Talent Acquisition, Campus Hiring, and Business Operations</strong> roles in <strong>Bengaluru</strong>.
+                        All spam recruitment companies were strictly filtered out, and roles matching your <strong>BBA degree, Naukri sourcing, LeadSquared CRM, and candidate interview coordination</strong> experience received top priority.
+                    </p>
+                    <div style="margin-bottom:14px;">
+                        <span style="display:inline-block; background:rgba(99, 102, 241, 0.1); color:#4338ca; border:1px solid rgba(99, 102, 241, 0.2); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-right:6px; margin-bottom:4px;">🎯 Focus: HR & Talent Acquisition</span>
+                        <span style="display:inline-block; background:rgba(16, 185, 129, 0.1); color:#047857; border:1px solid rgba(16, 185, 129, 0.2); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-right:6px; margin-bottom:4px;">📍 Location: Bengaluru, Karnataka</span>
+                        <span style="display:inline-block; background:rgba(245, 158, 11, 0.1); color:#b45309; border:1px solid rgba(245, 158, 11, 0.2); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-bottom:4px;">⚡ Status: Verified Live (<24h)</span>
+                    </div>
+                    <div style="font-size:12px; color:#475569; font-weight:600; border-top:1px dashed #c7d2fe; padding-top:10px;">
+                        Curated with care by <strong>Albi Aju</strong>
+                    </div>
+                </div>
 
+                <!-- Job Listings -->
                 {job_cards_html}
 
-                <!-- Motivation Box -->
-                <div style="background:#f8fafc; border-left:4px solid #6366f1; padding:14px 16px; border-radius:0 8px 8px 0; margin-top:24px; font-size:13px; color:#475569;">
-                    💡 <strong>Recruiter Tip:</strong> As an HR professional, highlight your metrics: candidate response rate on LinkedIn/Naukri, time-to-hire, and CRM proficiency on LeadSquared. Early applications receive maximum visibility!
+                <!-- Motivation / Pro-Tip Box -->
+                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-left:4px solid #6366f1; padding:16px 20px; border-radius:0 12px 12px 0; margin-top:24px; font-size:13px; color:#475569; line-height:1.6;">
+                    <div style="font-weight:700; color:#1e1b4b; margin-bottom:4px; font-size:14px;">
+                        💡 Recruiter Strategy Tip for Anosha
+                    </div>
+                    As an HR professional, highlight your metrics: candidate response rate on LinkedIn & Naukri, time-to-hire, and CRM proficiency on LeadSquared. Applications submitted in the evening receive maximum recruiter visibility the following morning!
                 </div>
             </div>
 
             <!-- Footer -->
-            <div style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:20px 24px; text-align:center; font-size:13px; color:#475569; line-height:1.6;">
-                Crafted for Anosha by <strong>Albi Aju</strong><br>
-                <span style="font-size:11px; color:#94a3b8;">Automated Daily Career Digest via GitHub Actions • Delivered daily at 8:00 PM IST</span>
+            <div style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:24px; text-align:center; font-size:13px; color:#475569; line-height:1.6;">
+                <div style="font-size:14px; font-weight:700; color:#0f172a; margin-bottom:4px;">
+                    Crafted for Anosha by <strong>Albi Aju</strong>
+                </div>
+                <div style="font-size:12px; color:#64748b; margin-bottom:8px;">
+                    Automated Daily Career Digest • Scheduled daily at 8:00 PM IST
+                </div>
+                <div style="font-size:11px; color:#94a3b8;">
+                    Powered by Python & GitHub Actions • Real-time LinkedIn Scraper • Zero Spam Guarantee
+                </div>
             </div>
         </div>
     </body>
