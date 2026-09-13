@@ -328,62 +328,128 @@ def score_job(job: dict) -> dict:
 # ==============================================================================
 # 🕸️ APIFY SCRAPER & REALISTIC CURATED DATASET
 # ==============================================================================
+# 🕸️ LIVE LINKEDIN & APIFY SCRAPER
+# ==============================================================================
+
+def scrape_live_linkedin_jobs() -> list:
+    """
+    Directly scrapes real-time live LinkedIn job postings from the public guest API.
+    Zero token cost, pulls fresh roles posted in the last 24h in Bengaluru.
+    """
+    import html
+    import requests
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    all_jobs = []
+    seen_links = set()
+
+    for q in SEARCH_QUERIES:
+        query_str = urllib.parse.quote(q["keywords"])
+        loc_str = urllib.parse.quote(q["location"])
+        url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={query_str}&location={loc_str}&f_TPR=r86400"
+
+        try:
+            res = requests.get(url, headers=headers, timeout=15)
+            if res.status_code != 200:
+                continue
+
+            links = re.findall(r'<a class="base-card__full-link[^\"]*" href="([^\"]*)"', res.text)
+            titles = re.findall(r'<h3 class="base-search-card__title">([\s\S]*?)</h3>', res.text)
+            companies = re.findall(r'<h4 class="base-search-card__subtitle">([\s\S]*?)</h4>', res.text)
+            locations = re.findall(r'<span class="job-search-card__location">([\s\S]*?)</span>', res.text)
+            times = re.findall(r'<time class="job-search-card__listdate[^\"]*"[^>]*>([\s\S]*?)</time>', res.text)
+
+            for i in range(len(titles)):
+                raw_title = html.unescape(re.sub(r'<[^>]+>', '', titles[i])).strip()
+                raw_company = html.unescape(re.sub(r'<[^>]+>', '', companies[i])).strip() if i < len(companies) else "Bengaluru Employer"
+                raw_loc = html.unescape(re.sub(r'<[^>]+>', '', locations[i])).strip() if i < len(locations) else "Bengaluru, Karnataka"
+                raw_link = links[i].split("?")[0] if i < len(links) else ""
+                posted_str = html.unescape(re.sub(r'<[^>]+>', '', times[i])).strip() if i < len(times) else "today"
+
+                if not raw_link or raw_link in seen_links:
+                    continue
+                seen_links.add(raw_link)
+
+                all_jobs.append({
+                    "title": raw_title,
+                    "company": raw_company,
+                    "location": raw_loc,
+                    "apply_url": raw_link,
+                    "posted_at": posted_str,
+                    "description": f"Live opening for {raw_title} at {raw_company} in {raw_loc}. End-to-end recruitment, candidate sourcing, screening, and HR coordination.",
+                    "type": "Full-time"
+                })
+        except Exception as e:
+            print(f"[ℹ️] Notice on live query ({q['keywords']}): {e}")
+
+    return all_jobs
+
 
 def fetch_jobs_from_apify(token: str = None) -> list:
     """
-    Pulls recent HR, Talent Acquisition, and Business Analyst jobs from LinkedIn via Apify.
-    If no token is provided or API call fails, falls back gracefully to
-    curated verified listings so the digest always works.
+    Pulls recent HR, Talent Acquisition, and Business Analyst jobs from LinkedIn.
+    1. Tries Apify if token is provided.
+    2. Automatically uses direct live LinkedIn scraping if Apify fails or has no credits.
+    3. Falls back to curated dataset only if completely offline.
     """
     token = token or APIFY_TOKEN
-    if not token:
-        print("[ℹ️] No APIFY_TOKEN provided. Using curated HR & Talent Acquisition dataset for Bengaluru.")
-        return get_sample_jobs()
+    live_jobs = []
 
-    try:
-        from apify_client import ApifyClient
-        client = ApifyClient(token)
-        print(f"[🚀] Initiating Apify scraper for HR & Talent Acquisition roles in Bengaluru...")
+    # 1. Try Apify if token available
+    if token and token.strip():
+        try:
+            from apify_client import ApifyClient
+            client = ApifyClient(token)
+            print(f"[🚀] Initiating Apify scraper for HR & Talent Acquisition roles in Bengaluru...")
 
-        search_urls = [
-            "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Associate&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
-            "https://www.linkedin.com/jobs/search/?keywords=HR%20Recruiter&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
-            "https://www.linkedin.com/jobs/search/?keywords=Campus%20Hiring%20Coordinator&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
-        ]
+            search_urls = [
+                "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Associate&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
+                "https://www.linkedin.com/jobs/search/?keywords=HR%20Recruiter&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
+                "https://www.linkedin.com/jobs/search/?keywords=Campus%20Hiring%20Coordinator&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
+            ]
 
-        run_input = {
-            "urls": search_urls,
-            "keywords": "Talent Acquisition Associate",
-            "location": "Bengaluru, Karnataka, India",
-            "datePosted": "past24Hours",
-            "limitPerSource": 15,
-        }
+            run_input = {
+                "urls": search_urls,
+                "keywords": "Talent Acquisition Associate",
+                "location": "Bengaluru, Karnataka, India",
+                "datePosted": "past24Hours",
+                "limitPerSource": 15,
+            }
 
-        run = client.actor(APIFY_ACTOR_ID).call(run_input=run_input, timeout_secs=120)
-        items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-        print(f"[✅] Successfully scraped {len(items)} raw listings from Apify.")
+            run = client.actor(APIFY_ACTOR_ID).call(run_input=run_input, timeout_secs=120)
+            items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+            print(f"[✅] Successfully scraped {len(items)} raw listings from Apify.")
 
-        normalized_jobs = []
-        for it in items:
-            title = it.get("title") or it.get("jobTitle") or "Talent Acquisition Associate"
-            company = it.get("companyName") or it.get("company") or "Bengaluru Employer"
-            location = it.get("location") or it.get("formattedLocation") or "Bengaluru, Karnataka"
-            raw_url = it.get("link") or it.get("jobUrl") or it.get("applyUrl") or it.get("url") or ""
+            for it in items:
+                title = it.get("title") or it.get("jobTitle") or "Talent Acquisition Associate"
+                company = it.get("companyName") or it.get("company") or "Bengaluru Employer"
+                location = it.get("location") or it.get("formattedLocation") or "Bengaluru, Karnataka"
+                raw_url = it.get("link") or it.get("jobUrl") or it.get("applyUrl") or it.get("url") or ""
 
-            normalized_jobs.append({
-                "title": title,
-                "company": company,
-                "location": location,
-                "apply_url": clean_apply_url(raw_url, title, company, location),
-                "posted_at": it.get("postedAt") or it.get("postDate") or "today",
-                "description": it.get("descriptionText") or it.get("description") or it.get("jobDescription") or "",
-                "type": it.get("employmentType") or "Full-time"
-            })
-        return normalized_jobs if normalized_jobs else get_sample_jobs()
+                live_jobs.append({
+                    "title": title,
+                    "company": company,
+                    "location": location,
+                    "apply_url": clean_apply_url(raw_url, title, company, location),
+                    "posted_at": it.get("postedAt") or it.get("postDate") or "today",
+                    "description": it.get("descriptionText") or it.get("description") or it.get("jobDescription") or "",
+                    "type": it.get("employmentType") or "Full-time"
+                })
+        except Exception as exc:
+            print(f"[⚠️] Apify client notice ({exc}). Switching to direct live LinkedIn scraper...")
 
-    except Exception as exc:
-        print(f"[⚠️] Apify client notice ({exc}). Falling back to curated dataset.")
-        return get_sample_jobs()
+    # 2. If Apify returned no jobs or had an error, use live direct LinkedIn scraper
+    if not live_jobs:
+        print("[🌐] Fetching real-time live jobs directly from LinkedIn...")
+        live_jobs = scrape_live_linkedin_jobs()
+        if live_jobs:
+            print(f"[✅] Successfully fetched {len(live_jobs)} live job postings from LinkedIn!")
+
+    # 3. If live scraping also returned nothing (e.g. offline), use curated dataset
+    return live_jobs if live_jobs else get_sample_jobs()
 
 
 def get_sample_jobs() -> list:
