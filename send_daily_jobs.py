@@ -582,8 +582,12 @@ def get_gmail_service():
             print(f"[⚠️] Token refresh failed: {e}")
             creds = None
 
-    # If no valid token, run OAuth flow with credentials file
+    # If no valid token, check if we can run interactive OAuth (only in local interactive environments)
     if not creds:
+        # If in headless CI environment (GitHub Actions), do not attempt interactive browser flow
+        if os.getenv("CI") or not sys.stdin.isatty():
+            return None
+
         client_config = None
         env_creds = os.getenv("GMAIL_CREDENTIALS_JSON")
         if env_creds:
@@ -637,11 +641,15 @@ def send_via_gmail_api(service, sender: str, recipient: str, subject: str, html_
 
 def send_via_smtp(sender: str, recipient: str, subject: str, html_body: str, text_body: str) -> bool:
     """Fallback email dispatcher using SMTP with Gmail App Password."""
-    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    password = os.getenv("MAIL_PASSWORD", "")
+    smtp_server = (os.getenv("SMTP_SERVER") or "").strip() or "smtp.gmail.com"
+    raw_port = (os.getenv("SMTP_PORT") or "").strip() or "587"
+    try:
+        smtp_port = int(raw_port)
+    except (ValueError, TypeError):
+        smtp_port = 587
 
-    if not password:
+    raw_password = (os.getenv("MAIL_PASSWORD") or "").strip()
+    if not raw_password:
         print("[ℹ️] No MAIL_PASSWORD configured for SMTP fallback.")
         return False
 
@@ -652,16 +660,27 @@ def send_via_smtp(sender: str, recipient: str, subject: str, html_body: str, tex
     message.attach(MIMEText(text_body, "plain"))
     message.attach(MIMEText(html_body, "html"))
 
-    try:
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(sender, password)
-            server.send_message(message)
-        print(f"[📬] Successfully sent morning digest via SMTP to {recipient}")
-        return True
-    except Exception as exc:
-        print(f"[❌] SMTP send failed: {exc}")
-        return False
+    # Gmail App passwords may be provided with or without spaces
+    clean_password = raw_password.replace(" ", "")
+
+    # Try clean password first, then raw if different
+    passwords_to_try = [clean_password] if clean_password == raw_password else [clean_password, raw_password]
+
+    for pwd in passwords_to_try:
+        try:
+            with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(sender, pwd)
+                server.send_message(message)
+            print(f"[📬] Successfully sent morning digest via SMTP to {recipient}")
+            return True
+        except Exception as exc:
+            print(f"[⚠️] SMTP attempt notice: {exc}")
+
+    print("[❌] All SMTP delivery attempts failed. Check sender email and Gmail App Password.")
+    return False
 
 
 def dispatch_email(subject: str, html_body: str, text_body: str) -> bool:

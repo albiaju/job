@@ -28,14 +28,11 @@ jobs:
       - name: Run Daily Job Scraper
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-          APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
           GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
-          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
         run: |
           python send_daily_jobs.py --now
 
