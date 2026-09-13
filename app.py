@@ -208,7 +208,7 @@ def build_email_body(ranked_jobs):
         "",
         "Keep pushing forward. The right opportunity is on the way.",
         "",
-        "Crafted with ❤️ for Anosha by Albi",
+        "Crafted for Anosha by Albi",
         "CareerBoost Assistant"
     ])
     return "\n".join(lines)
@@ -329,7 +329,7 @@ def home():
         {% endif %}
 
         <p style="text-align:center; color:#64748b; margin-top:30px; font-size:13px;">
-          Crafted with ❤️ for Anosha by <strong>Albi</strong>
+          Crafted for Anosha by <strong>Albi</strong>
         </p>
       </div>
     </body>

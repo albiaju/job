@@ -77,4 +77,4 @@ To let it run every morning at **7:00 AM IST** without keeping your computer on:
 
 ## 👨‍💻 Author
 
-Crafted with ❤️ by **[Albi](https://github.com/albiaju)** for **Anosha Mariam**.
+Crafted by **[Albi](https://github.com/albiaju)** for **Anosha Mariam**.
