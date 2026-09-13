@@ -77,4 +77,4 @@ To let it run every evening at **8:00 PM – 8:30 PM IST** without keeping your 
 
 ## 👨‍💻 Author
 
-Crafted by **[Albi](https://github.com/albiaju)** for **Anosha Mariam**.
+Crafted by **[Albi Aju](https://github.com/albiaju)** for **Anosha Mariam**.

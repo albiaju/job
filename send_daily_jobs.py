@@ -663,8 +663,8 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
             <!-- Body Content -->
             <div style="padding:24px;">
                 <p style="font-size:14px; color:#475569; margin-top:0; margin-bottom:20px; line-height:1.5;">
-                    Hello Anosha! Here are today's top matching <strong>HR, Talent Acquisition, Campus Hiring, and Business Operations</strong> roles in <strong>Bengaluru</strong>.
-                    Spam recruitment companies were filtered out, and roles matching your BBA, Naukri, LeadSquared CRM, and recruiting experience received top priority.
+                    Hello Anosha!, Sugam ale.... Here are today's top matching <strong>HR, Talent Acquisition, Campus Hiring, and Business Operations</strong> roles in <strong>Bengaluru</strong>.
+                    Spam recruitment companies were filtered out, and roles matching your BBA, Naukri, LeadSquared CRM, and recruiting experience received top priority. By <strong>Albi Aju</strong>
                 </p>
 
                 {job_cards_html}
@@ -677,7 +677,7 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
 
             <!-- Footer -->
             <div style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:20px 24px; text-align:center; font-size:13px; color:#475569; line-height:1.6;">
-                Crafted for Anosha by <strong>Albi</strong><br>
+                Crafted for Anosha by <strong>Albi Aju</strong><br>
                 <span style="font-size:11px; color:#94a3b8;">Automated Daily Career Digest via GitHub Actions • Delivered daily at 8:00 PM IST</span>
             </div>
         </div>
@@ -709,7 +709,7 @@ def generate_text_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
         lines.append("-" * 60)
 
     lines.append("\nTip: Tailor your application by highlighting your LeadSquared CRM, campus hiring, and Naukri sourcing expertise!")
-    lines.append("Crafted for Anosha by Albi • Automated Daily Career Digest")
+    lines.append("Crafted for Anosha by Albi Aju • Automated Daily Career Digest")
     return "\n".join(lines)
 
 

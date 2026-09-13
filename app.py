@@ -329,7 +329,7 @@ def home():
         {% endif %}
 
         <p style="text-align:center; color:#64748b; margin-top:30px; font-size:13px;">
-          Crafted for Anosha by <strong>Albi</strong>
+          Crafted for Anosha by <strong>Albi Aju</strong>
         </p>
       </div>
     </body>
