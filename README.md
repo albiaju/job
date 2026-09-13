@@ -1,15 +1,15 @@
-# 🎯 Daily Job Scraper
+# 🎯 Daily Career Scraper
 
-A lightweight, automated Python script that scrapes fresh tech jobs from LinkedIn and emails you a beautifully formatted digest every morning.
+A lightweight, automated Python script that scrapes fresh **HR, Talent Acquisition, and Business** roles from LinkedIn and emails a beautifully formatted digest every morning tailored for **Anosha Mariam** (BBA • Talent Acquisition).
 
 ---
 
 ## 🌟 What It Does
 
-- **Scrapes Jobs**: Uses Apify to pull recently posted AI, Machine Learning, and Python jobs.
-- **Filters Spam**: Automatically blocks known spam companies (like Mindrift, Crossover, Outlier, etc.) so you only see genuine, high-quality roles.
-- **Smart Scoring**: Ranks jobs based on specific skills, how recently they were posted, and gives a massive bonus boost to top-tier tech companies (Google, Meta, OpenAI, Apple, etc.).
-- **Morning Digest**: Sends a clean, color-coded HTML email summarizing the best matches every day at 7:00 AM IST.
+- **Scrapes Roles**: Uses Apify to pull recently posted **Talent Acquisition, HR Recruiter, Campus Hiring, and Business Operations** roles in Bengaluru.
+- **Filters Spam**: Automatically blocks known spam companies (like Mindrift, Crossover, Outlier, etc.) so you only see genuine, high-quality career roles.
+- **Smart Scoring**: Ranks roles based on resume skills (Naukri, LeadSquared CRM, Advanced Excel, Sourcing, Campus Hiring, BBA Analytics), recency, and gives a bonus boost to top employers (Google, Amazon, Deloitte, Flipkart, Swiggy, Kalvium, etc.).
+- **Morning Digest**: Sends a clean, color-coded HTML email summarizing the best matches with working LinkedIn direct-apply links every day at 7:00 AM IST.
 
 ---
 

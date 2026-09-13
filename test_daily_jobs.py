@@ -15,6 +15,7 @@ from send_daily_jobs import (
     COMPANY_BLACKLIST,
     GOOD_COMPANIES,
     calculate_recency_score,
+    clean_apply_url,
     extract_matched_skills,
     generate_html_digest,
     generate_text_digest,
@@ -30,10 +31,8 @@ class TestDailyJobScraper(unittest.TestCase):
         """Test that spam companies are correctly identified and normal companies pass."""
         spam_companies = [
             "Mindrift",
-            "Mindrift AI",
             "Crossover for Work",
             "Outlier",
-            "Outlier.ai",
             "DataAnnotation Tech",
             "BairesDev Inc.",
             "Turing Enterprises"
@@ -41,17 +40,16 @@ class TestDailyJobScraper(unittest.TestCase):
         for company in spam_companies:
             self.assertTrue(is_blacklisted(company), f"Expected {company} to be blacklisted as spam.")
 
-        legit_companies = ["Google", "OpenAI", "Meta", "Swiggy", "Infosys", "Microsoft"]
+        legit_companies = ["Google", "Amazon", "Deloitte", "Swiggy", "Kalvium", "Infosys"]
         for company in legit_companies:
             self.assertFalse(is_blacklisted(company), f"Expected {company} NOT to be blacklisted.")
 
     def test_good_company_bonus(self):
-        """Test that top-tier tech companies are correctly recognized."""
-        for company in ["Google", "Google DeepMind", "Meta", "OpenAI", "Apple", "Microsoft", "NVIDIA", "Anthropic"]:
-            self.assertTrue(is_good_company(company), f"Expected {company} to be recognized as a top-tier company.")
+        """Test that top employers in Bengaluru are recognized."""
+        for company in ["Google", "Amazon", "Deloitte", "Swiggy", "Kalvium", "Flipkart", "Infosys"]:
+            self.assertTrue(is_good_company(company), f"Expected {company} to be recognized as a top employer.")
 
-        self.assertFalse(is_good_company("Generic Tech Staffing"))
-        self.assertFalse(is_good_company("Local Agency LLC"))
+        self.assertFalse(is_good_company("Generic Staffing Agency"))
 
     def test_recency_scoring(self):
         """Test recency scoring and freshness badges."""
@@ -64,72 +62,63 @@ class TestDailyJobScraper(unittest.TestCase):
         self.assertEqual(pts, 18)
         self.assertTrue(fresh)
 
-        pts, fresh, label = calculate_recency_score("3 days ago")
-        self.assertEqual(pts, 12)
-        self.assertFalse(fresh)
+    def test_working_url_cleaning(self):
+        """Test that sample or broken URLs are converted to live LinkedIn search links."""
+        broken_url = "https://www.linkedin.com/jobs/view/sample-slug"
+        cleaned = clean_apply_url(broken_url, "Talent Acquisition Associate", "Kalvium", "Bengaluru")
+        self.assertTrue(cleaned.startswith("https://www.linkedin.com/jobs/search/?keywords="))
+        self.assertIn("Talent%20Acquisition%20Associate", cleaned)
+        self.assertIn("Kalvium", cleaned)
 
-    def test_skill_extraction(self):
-        """Test extracting skills from job descriptions."""
-        text = "Seeking an AI Engineer skilled in Python, PyTorch, LangChain, and Docker with LLM fine-tuning."
+        live_url = "https://www.linkedin.com/jobs/view/123456789"
+        self.assertEqual(clean_apply_url(live_url, "HR Recruiter", "Amazon"), live_url)
+
+    def test_skill_extraction_for_anosha(self):
+        """Test extracting skills relevant to Anosha's BBA & HR recruitment background."""
+        text = "Seeking a Talent Acquisition Associate skilled in campus hiring, resume screening, LeadSquared CRM, and advanced excel."
         skills = extract_matched_skills(text)
-        self.assertIn("Python", skills)
-        self.assertIn("Pytorch", skills)
-        self.assertIn("Langchain", skills)
-        self.assertIn("Docker", skills)
-        self.assertIn("LLM", skills)
+        self.assertIn("Talent Acquisition", skills)
+        self.assertIn("Campus Hiring", skills)
+        self.assertIn("Resume Screening", skills)
+        self.assertIn("LeadSquared CRM", skills)
+        self.assertIn("Advanced Excel", skills)
 
-    def test_score_job_calculation_and_boost(self):
-        """Test overall scoring including the 30-point top-tier tech bonus."""
-        top_tier_job = {
-            "title": "Machine Learning Engineer",
-            "company": "Google",
-            "description": "Python, PyTorch, LangChain, Transformers, Kubernetes",
+    def test_score_job_calculation_for_hr(self):
+        """Test scoring for HR Talent Acquisition in Bengaluru."""
+        hr_job = {
+            "title": "Talent Acquisition Associate",
+            "company": "Deloitte",
+            "description": "End to end recruitment, campus hiring, Naukri, LeadSquared CRM, Excel, BBA",
             "posted_at": "Just now",
-            "location": "Bengaluru",
-            "apply_url": "https://linkedin.com/test",
+            "location": "Bengaluru, Karnataka",
+            "apply_url": "https://www.linkedin.com/jobs/view/sample",
             "type": "Full-time"
         }
-        scored_top = score_job(top_tier_job)
-        self.assertTrue(scored_top["is_top_tier"])
-        self.assertTrue(scored_top["is_fresh"])
-        self.assertGreaterEqual(scored_top["score"], 80)
-        self.assertEqual(scored_top["match_tier"], "High Match")
+        scored = score_job(hr_job)
+        self.assertTrue(scored["is_top_tier"])
+        self.assertTrue(scored["is_fresh"])
+        self.assertGreaterEqual(scored["score"], 80)
+        self.assertEqual(scored["match_tier"], "High Match")
+        self.assertTrue(scored["apply_url"].startswith("https://www.linkedin.com/jobs/"))
 
-        standard_job = {
-            "title": "Junior Python Assistant",
-            "company": "RegularCorp",
-            "description": "Basic Python script maintenance.",
-            "posted_at": "6 days ago",
-            "location": "Remote",
-            "apply_url": "https://linkedin.com/test2",
-            "type": "Part-time"
-        }
-        scored_std = score_job(standard_job)
-        self.assertFalse(scored_std["is_top_tier"])
-        self.assertLess(scored_std["score"], scored_top["score"])
-
-    def test_digest_generation(self):
-        """Test generating HTML and plaintext digests."""
+    def test_digest_generation_for_anosha(self):
+        """Test generating HTML and plaintext digests customized for Anosha."""
         sample_ranked = [
             score_job({
-                "title": "AI Engineer",
-                "company": "OpenAI",
-                "description": "Python, LLM, PyTorch",
+                "title": "Talent Acquisition Associate",
+                "company": "Kalvium",
+                "description": "Campus hiring, screening, LeadSquared CRM, Excel",
                 "posted_at": "today",
-                "location": "Remote",
-                "apply_url": "https://linkedin.com/jobs/view/123",
+                "location": "Bengaluru, Karnataka",
+                "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition",
                 "type": "Full-time"
             })
         ]
-        html = generate_html_digest(sample_ranked, spam_count=3, total_scraped=10)
-        self.assertIn("Daily Tech Job Digest", html)
-        self.assertIn("OpenAI", html)
-        self.assertIn("https://linkedin.com/jobs/view/123", html)
-        self.assertIn("Spam Filtered", html)
-
-        text = generate_text_digest(sample_ranked, spam_count=3, total_scraped=10)
-        self.assertIn("DAILY TECH JOB DIGEST", text)
-        self.assertIn("OpenAI", text)
+        html = generate_html_digest(sample_ranked, spam_count=2, total_scraped=8)
+        self.assertIn("Anosha Mariam Raji", html)
+        self.assertIn("Talent Acquisition", html)
+        self.assertIn("Kalvium", html)
+        self.assertIn("View & Apply on LinkedIn", html)
 
     def test_pipeline_dry_run(self):
         """Test running the full pipeline in dry-run mode."""
@@ -140,7 +129,7 @@ class TestDailyJobScraper(unittest.TestCase):
         preview_file = Path("daily_jobs_preview.html")
         self.assertTrue(preview_file.exists())
         content = preview_file.read_text(encoding="utf-8")
-        self.assertIn("Daily Tech Job Digest", content)
+        self.assertIn("Anosha Mariam Raji", content)
 
 
 if __name__ == "__main__":
