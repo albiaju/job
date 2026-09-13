@@ -331,6 +331,24 @@ def score_job(job: dict) -> dict:
 # 🕸️ LIVE LINKEDIN & APIFY SCRAPER
 # ==============================================================================
 
+def is_relevant_role(title: str) -> bool:
+    """Ensures scraped roles are strictly HR, Talent Acquisition, Recruiting, or Business Analytics."""
+    title_lower = (title or "").lower()
+    hr_terms = [
+        "hr", "human resource", "talent", "recruiter", "recruitment",
+        "hiring", "sourcing", "people", "staffing", "onboarding",
+        "campus", "business analyst", "analytics", "operations associate",
+        "talent partner", "hr associate"
+    ]
+    exclude_terms = [
+        "exchange", "o365", "software engineer", "devops", "cloud engineer",
+        "java", ".net", "technician", "electrician", "hardware", "civil"
+    ]
+    if any(ex in title_lower for ex in exclude_terms):
+        return False
+    return any(term in title_lower for term in hr_terms)
+
+
 def scrape_live_linkedin_jobs() -> list:
     """
     Directly scrapes real-time live LinkedIn job postings from the public guest API.
@@ -371,6 +389,8 @@ def scrape_live_linkedin_jobs() -> list:
 
                 if not raw_link or raw_link in seen_links:
                     continue
+                if not is_relevant_role(raw_title):
+                    continue
                 seen_links.add(raw_link)
 
                 all_jobs.append({
@@ -379,7 +399,7 @@ def scrape_live_linkedin_jobs() -> list:
                     "location": raw_loc,
                     "apply_url": raw_link,
                     "posted_at": posted_str,
-                    "description": f"Live opening for {raw_title} at {raw_company} in {raw_loc}. End-to-end recruitment, candidate sourcing, screening, and HR coordination.",
+                    "description": f"{raw_title} position at {raw_company} in {raw_loc}. Focused on candidate sourcing, screening, interview coordination, and HR operations.",
                     "type": "Full-time"
                 })
         except Exception as e:
