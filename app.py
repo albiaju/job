@@ -338,7 +338,7 @@ def home():
 
 
 if __name__ == "__main__":
-    time_str = os.getenv("DAILY_EMAIL_TIME", "09:00")
+    time_str = os.getenv("DAILY_EMAIL_TIME", "20:00")
     hour, minute = [int(part) for part in time_str.split(":")[:2]]
 
     scheduler = BackgroundScheduler()

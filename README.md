@@ -1,6 +1,6 @@
 # 🎯 Daily Career Scraper
 
-A lightweight, automated Python script that scrapes fresh **HR, Talent Acquisition, and Business** roles from LinkedIn and emails a beautifully formatted digest every morning tailored for **Anosha Mariam** (BBA • Talent Acquisition).
+A lightweight, automated Python script that scrapes fresh **HR, Talent Acquisition, and Business** roles from LinkedIn and emails a beautifully formatted digest every evening (8:00 PM – 8:30 PM IST) tailored for **Anosha Mariam** (BBA • Talent Acquisition).
 
 ---
 
