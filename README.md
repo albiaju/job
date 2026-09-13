@@ -9,7 +9,7 @@ A lightweight, automated Python script that scrapes fresh **HR, Talent Acquisiti
 - **Scrapes Roles**: Uses Apify to pull recently posted **Talent Acquisition, HR Recruiter, Campus Hiring, and Business Operations** roles in Bengaluru.
 - **Filters Spam**: Automatically blocks known spam companies (like Mindrift, Crossover, Outlier, etc.) so you only see genuine, high-quality career roles.
 - **Smart Scoring**: Ranks roles based on resume skills (Naukri, LeadSquared CRM, Advanced Excel, Sourcing, Campus Hiring, BBA Analytics), recency, and gives a bonus boost to top employers (Google, Amazon, Deloitte, Flipkart, Swiggy, Kalvium, etc.).
-- **Morning Digest**: Sends a clean, color-coded HTML email summarizing the best matches with working LinkedIn direct-apply links every day at 7:00 AM IST.
+- **Daily Digest**: Sends a clean, color-coded HTML email summarizing the best matches with working LinkedIn direct-apply links every evening between 8:00 PM – 8:30 PM IST.
 
 ---
 
@@ -60,7 +60,7 @@ A lightweight, automated Python script that scrapes fresh **HR, Talent Acquisiti
 
 ## ☁️ GitHub Actions Setup (Automated Cloud Run)
 
-To let it run every morning at **7:00 AM IST** without keeping your computer on:
+To let it run every evening at **8:00 PM – 8:30 PM IST** without keeping your computer on:
 
 1. Push this repository to GitHub.
 2. In your GitHub repository, navigate to **Settings** > **Secrets and variables** > **Actions**.
@@ -71,7 +71,7 @@ To let it run every morning at **7:00 AM IST** without keeping your computer on:
    - `GMAIL_CREDENTIALS_JSON`: The full text content of your `gmail_credentials.json`.
    - `GMAIL_TOKEN_JSON`: The generated token content from `token.json` after your first local run.
    - *(Optional fallback)*: `MAIL_PASSWORD`: Your 16-character Gmail App Password.
-4. The workflow in `.github/workflows/daily_jobs.yml` is scheduled to execute daily at 01:30 UTC (**7:00 AM IST**). You can also click **Run workflow** in the Actions tab at any time to test immediately!
+4. The workflow in `.github/workflows/daily_jobs.yml` is scheduled to execute daily at 14:30 UTC (**8:00 PM IST**). You can also click **Run workflow** in the Actions tab at any time to test immediately!
 
 ---
 
