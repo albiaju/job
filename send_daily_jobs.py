@@ -676,8 +676,9 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
             </div>
 
             <!-- Footer -->
-            <div style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:18px 24px; text-align:center; font-size:12px; color:#94a3b8;">
-                Automated by <strong>Daily Job Scraper</strong> via GitHub Actions • Delivered at 7:00 AM IST
+            <div style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:20px 24px; text-align:center; font-size:13px; color:#475569; line-height:1.6;">
+                Crafted with ❤️ for Anosha by <strong>Albi</strong><br>
+                <span style="font-size:11px; color:#94a3b8;">Automated Daily Career Digest via GitHub Actions • Delivered at 7:00 AM IST</span>
             </div>
         </div>
     </body>
@@ -708,7 +709,7 @@ def generate_text_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
         lines.append("-" * 60)
 
     lines.append("\nTip: Tailor your application by highlighting your LeadSquared CRM, campus hiring, and Naukri sourcing expertise!")
-    lines.append("Daily Career Scraper • Automated GitHub Actions")
+    lines.append("Crafted with ❤️ for Anosha by Albi • Automated Daily Career Digest")
     return "\n".join(lines)
 
 

@@ -208,7 +208,7 @@ def build_email_body(ranked_jobs):
         "",
         "Keep pushing forward. The right opportunity is on the way.",
         "",
-        "Best,",
+        "Crafted with ❤️ for Anosha by Albi",
         "CareerBoost Assistant"
     ])
     return "\n".join(lines)
@@ -327,6 +327,10 @@ def home():
         {% else %}
         <p>No job match was found for the provided resume.</p>
         {% endif %}
+
+        <p style="text-align:center; color:#64748b; margin-top:30px; font-size:13px;">
+          Crafted with ❤️ for Anosha by <strong>Albi</strong>
+        </p>
       </div>
     </body>
     </html>

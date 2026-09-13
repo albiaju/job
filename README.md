@@ -72,3 +72,9 @@ To let it run every morning at **7:00 AM IST** without keeping your computer on:
    - `GMAIL_TOKEN_JSON`: The generated token content from `token.json` after your first local run.
    - *(Optional fallback)*: `MAIL_PASSWORD`: Your 16-character Gmail App Password.
 4. The workflow in `.github/workflows/daily_jobs.yml` is scheduled to execute daily at 01:30 UTC (**7:00 AM IST**). You can also click **Run workflow** in the Actions tab at any time to test immediately!
+
+---
+
+## 👨‍💻 Author
+
+Crafted with ❤️ by **[Albi](https://github.com/albiaju)** for **Anosha Mariam**.
