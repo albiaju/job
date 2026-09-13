@@ -728,7 +728,7 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
                 <!-- Personalized Welcome Card -->
                 <div style="background:linear-gradient(135deg, #f8faff 0%, #eef2ff 100%); border:1px solid #c7d2fe; border-radius:16px; padding:22px 24px; margin-bottom:24px; box-shadow:0 4px 14px rgba(99, 102, 241, 0.06);">
                     <div style="font-size:17px; font-weight:800; color:#1e1b4b; margin-bottom:8px;">
-                        ✨ Hello Anosha!, Sugam ale.... <span style="font-size:13px; color:#6366f1; font-weight:600;">(സുഖം അല്ലേ?) 👋</span>
+                        ✨ Hello Anosha!, Sugam ale.... 👋
                     </div>
                     <p style="font-size:14px; color:#334155; line-height:1.65; margin:0 0 14px 0;">
                         Good evening! Here are today's top matching <strong>HR, Talent Acquisition, Campus Hiring, and Business Operations</strong> roles in <strong>Bengaluru</strong>.
@@ -740,7 +740,7 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
                         <span style="display:inline-block; background:rgba(245, 158, 11, 0.1); color:#b45309; border:1px solid rgba(245, 158, 11, 0.2); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-bottom:4px;">⚡ Status: Verified Live (<24h)</span>
                     </div>
                     <div style="font-size:12px; color:#475569; font-weight:600; border-top:1px dashed #c7d2fe; padding-top:10px;">
-                        Curated with care by <strong>Albi Aju</strong>
+                        Curated by <strong>Albi Aju</strong>
                     </div>
                 </div>
 
