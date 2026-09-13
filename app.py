@@ -2,6 +2,7 @@ import json
 import os
 import re
 import smtplib
+import urllib.parse
 from datetime import datetime
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -139,6 +140,20 @@ def score_job(resume_text, job):
     return score, sorted(overlap)
 
 
+def build_company_link(company, title, location, existing_url):
+    clean_company = (company or "").strip()
+    clean_title = (title or "").strip()
+    clean_loc = (location or "Bengaluru, Karnataka").strip()
+    
+    # If the URL already contains the company name, use it
+    if existing_url and (clean_company.lower() in existing_url.lower() or urllib.parse.quote(clean_company).lower() in existing_url.lower()):
+        return existing_url
+
+    encoded_keywords = urllib.parse.quote(f"{clean_company} {clean_title}".strip())
+    encoded_loc = urllib.parse.quote(clean_loc)
+    return f"https://www.linkedin.com/jobs/search/?keywords={encoded_keywords}&location={encoded_loc}"
+
+
 def find_ranked_jobs(resume_text):
     if not resume_text or not resume_text.strip():
         return []
@@ -147,12 +162,13 @@ def find_ranked_jobs(resume_text):
     ranked_jobs = []
     for job in jobs:
         score, overlap = score_job(resume_text, job)
+        apply_url = build_company_link(job.get("company", ""), job.get("title", ""), job.get("location", ""), job.get("apply_url", ""))
         ranked_jobs.append({
             "company": job["company"],
             "title": job["title"],
             "location": job["location"],
             "type": job["type"],
-            "apply_url": job["apply_url"],
+            "apply_url": apply_url,
             "description": job["description"],
             "score": score,
             "match_keywords": overlap[:10]

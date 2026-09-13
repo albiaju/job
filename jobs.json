@@ -4,25 +4,70 @@
     "title": "Talent Acquisition Associate",
     "location": "Bengaluru, Karnataka",
     "type": "Full-time",
-    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Associate&location=Bengaluru%2C%20Karnataka",
-    "description": "We are hiring a Talent Acquisition Associate to manage end-to-end recruitment, candidate sourcing, screening, interview coordination, and onboarding. Experience with job boards, CRM tools, and candidate communication is preferred.",
-    "skills": ["recruitment", "talent acquisition", "screening", "sourcing", "interview", "onboarding", "campus hiring", "naukri", "linkedin", "crm", "excel"]
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Kalvium%20Talent%20Acquisition%20Associate&location=Bengaluru%2C%20Karnataka",
+    "description": "We are hiring a Talent Acquisition Associate to manage end-to-end recruitment, candidate sourcing, screening, interview coordination, and onboarding. Experience with job boards, LeadSquared CRM, and candidate communication is preferred.",
+    "skills": ["recruitment", "talent acquisition", "screening", "sourcing", "interview", "onboarding", "campus hiring", "naukri", "linkedin", "crm", "excel", "leadsquared"]
+  },
+  {
+    "company": "Amazon",
+    "title": "HR Recruiter - Talent Acquisition",
+    "location": "Bengaluru, Karnataka",
+    "type": "Full-time",
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Amazon%20HR%20Recruiter&location=Bengaluru%2C%20Karnataka",
+    "description": "Responsible for full lifecycle recruiting, candidate sourcing on LinkedIn and Naukri, HR screening interviews, scheduling with hiring managers, and onboarding operations.",
+    "skills": ["recruitment", "hr", "recruiter", "talent acquisition", "sourcing", "screening", "interview coordination", "onboarding", "excel", "linkedin", "naukri"]
+  },
+  {
+    "company": "Deloitte",
+    "title": "Campus Hiring Coordinator",
+    "location": "Bengaluru, Karnataka",
+    "type": "Full-time",
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Deloitte%20Campus%20Hiring%20Coordinator&location=Bengaluru%2C%20Karnataka",
+    "description": "Collaborate with colleges and universities to manage campus recruitment drives, placement events, candidate communications, and onboarding workflows. BBA graduates preferred.",
+    "skills": ["campus hiring", "recruitment", "interview coordination", "candidate communication", "onboarding", "hr", "excel", "bba"]
+  },
+  {
+    "company": "Flipkart",
+    "title": "HR Operations & People Analytics Associate",
+    "location": "Bengaluru, Karnataka",
+    "type": "Full-time",
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Flipkart%20HR%20Operations&location=Bengaluru%2C%20Karnataka",
+    "description": "Drive recruitment pipeline tracking, candidate onboarding documentation, and talent analytics reports using Power BI and Advanced Excel. Bachelor of Business Administration (BBA) preferred.",
+    "skills": ["hr operations", "power bi", "excel", "advanced excel", "business analytics", "onboarding", "recruitment", "bba"]
+  },
+  {
+    "company": "Swiggy",
+    "title": "Talent Acquisition Specialist",
+    "location": "Bengaluru, Karnataka",
+    "type": "Full-time",
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Swiggy%20Talent%20Acquisition&location=Bengaluru%2C%20Karnataka",
+    "description": "Source and screen candidates for business and operations roles. Manage candidate interview scheduling, candidate experience, and recruitment trackers in Excel.",
+    "skills": ["talent acquisition", "sourcing", "screening", "interview scheduling", "candidate experience", "recruitment", "excel"]
   },
   {
     "company": "PeopleBridge HR",
     "title": "HR Recruiter",
     "location": "Bengaluru, Karnataka",
     "type": "Full-time",
-    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=HR%20Recruiter&location=Bengaluru%2C%20Karnataka",
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=PeopleBridge%20HR%20Recruiter&location=Bengaluru%2C%20Karnataka",
     "description": "Join our recruitment team to manage job postings, candidate pipelines, scheduling, and onboarding for multiple business units. Strong communication, sourcing, and screening skills are required.",
     "skills": ["recruitment", "hr", "recruiter", "candidate sourcing", "screening", "interview coordination", "onboarding", "excel", "communication"]
+  },
+  {
+    "company": "TalentFlow Pvt Ltd",
+    "title": "Talent Acquisition Executive",
+    "location": "Remote, India",
+    "type": "Hybrid",
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=TalentFlow%20Talent%20Acquisition%20Executive&location=India",
+    "description": "Support hiring processes across business units including sourcing, resume screening, phone screening, interview scheduling, offer coordination, and candidate onboarding in a remote environment.",
+    "skills": ["talent acquisition", "resume screening", "interview scheduling", "sourcing", "onboarding", "recruitment", "remote", "excel"]
   },
   {
     "company": "SkillNest India",
     "title": "Recruitment Executive",
     "location": "Hyderabad, Telangana",
     "type": "Full-time",
-    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Recruitment%20Executive&location=Hyderabad%2C%20Telangana",
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=SkillNest%20Recruitment%20Executive&location=Hyderabad%2C%20Telangana",
     "description": "Looking for a recruitment executive to source candidates, coordinate interviews, maintain candidate databases, and support hiring goals. Prefer candidates with experience in Naukri, LinkedIn, and recruitment operations.",
     "skills": ["recruitment", "hiring", "candidate sourcing", "linkedin", "naukri", "interview scheduling", "excel", "talent acquisition"]
   },
@@ -31,26 +76,8 @@
     "title": "Campus Hiring Coordinator",
     "location": "Chennai, Tamil Nadu",
     "type": "Full-time",
-    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Campus%20Hiring%20Coordinator&location=Chennai%2C%20Tamil%20Nadu",
+    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=PeopleGrid%20Campus%20Hiring%20Coordinator&location=Chennai%2C%20Tamil%20Nadu",
     "description": "Responsible for collaborating with colleges, managing campus hiring events, and coordinating candidate communication. Good knowledge of recruitment workflows, HR interviewing, and onboarding is required.",
     "skills": ["campus hiring", "recruitment", "college", "interview coordination", "candidate communication", "onboarding", "hr"]
-  },
-  {
-    "company": "TalentFlow Pvt Ltd",
-    "title": "Talent Acquisition Executive",
-    "location": "Remote, India",
-    "type": "Hybrid",
-    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Executive&location=India",
-    "description": "Support hiring processes across business units including sourcing, resume screening, phone screening, interview scheduling, offer coordination, and candidate onboarding in a remote environment.",
-    "skills": ["talent acquisition", "resume screening", "interview scheduling", "sourcing", "onboarding", "recruitment", "remote", "excel"]
-  },
-  {
-    "company": "Riviera Staffing Solutions",
-    "title": "Recruitment Coordinator",
-    "location": "Kochi, Kerala",
-    "type": "Full-time",
-    "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Recruitment%20Coordinator&location=Kochi%2C%20Kerala",
-    "description": "Coordinate recruitment workflow including job post creation, candidate communication, scheduling interviews, and maintaining updated recruitment trackers using Excel and CRM tools.",
-    "skills": ["recruitment", "interview coordination", "candidate communication", "excel", "crm", "scheduling", "onboarding"]
   }
 ]
