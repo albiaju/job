@@ -345,11 +345,18 @@ def fetch_jobs_from_apify(token: str = None) -> list:
         client = ApifyClient(token)
         print(f"[🚀] Initiating Apify scraper for HR & Talent Acquisition roles in Bengaluru...")
 
+        search_urls = [
+            "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Associate&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
+            "https://www.linkedin.com/jobs/search/?keywords=HR%20Recruiter&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
+            "https://www.linkedin.com/jobs/search/?keywords=Campus%20Hiring%20Coordinator&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
+        ]
+
         run_input = {
-            "title": "Talent Acquisition Associate, HR Recruiter, Campus Hiring",
+            "urls": search_urls,
+            "keywords": "Talent Acquisition Associate",
             "location": "Bengaluru, Karnataka, India",
-            "rows": 40,
-            "publishedAt": "r86400",  # Past 24 hours
+            "datePosted": "past24Hours",
+            "limitPerSource": 15,
         }
 
         run = client.actor(APIFY_ACTOR_ID).call(run_input=run_input, timeout_secs=120)
@@ -361,7 +368,7 @@ def fetch_jobs_from_apify(token: str = None) -> list:
             title = it.get("title") or it.get("jobTitle") or "Talent Acquisition Associate"
             company = it.get("companyName") or it.get("company") or "Bengaluru Employer"
             location = it.get("location") or it.get("formattedLocation") or "Bengaluru, Karnataka"
-            raw_url = it.get("jobUrl") or it.get("link") or it.get("url") or ""
+            raw_url = it.get("link") or it.get("jobUrl") or it.get("applyUrl") or it.get("url") or ""
 
             normalized_jobs.append({
                 "title": title,
@@ -369,7 +376,7 @@ def fetch_jobs_from_apify(token: str = None) -> list:
                 "location": location,
                 "apply_url": clean_apply_url(raw_url, title, company, location),
                 "posted_at": it.get("postedAt") or it.get("postDate") or "today",
-                "description": it.get("description") or it.get("jobDescription") or "",
+                "description": it.get("descriptionText") or it.get("description") or it.get("jobDescription") or "",
                 "type": it.get("employmentType") or "Full-time"
             })
         return normalized_jobs if normalized_jobs else get_sample_jobs()
