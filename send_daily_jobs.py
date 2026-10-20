@@ -337,11 +337,19 @@ def scrape_live_linkedin_jobs() -> list:
                 if not raw_link or raw_link in seen_links or not is_relevant_role(raw_title):
                     continue
 
+                raw_location = (
+                    location_tag.get_text(" ", strip=True)
+                    if location_tag else ""
+                )
+                if not is_target_location(raw_location):
+                    print(f"[INFO] Skipping non-Chennai LinkedIn result: {raw_title!r} — {raw_location!r}")
+                    continue
+
                 seen_links.add(raw_link)
                 all_jobs.append({
                     "title": raw_title,
                     "company": company_tag.get_text(" ", strip=True) if company_tag else "",
-                    "location": location_tag.get_text(" ", strip=True) if location_tag else LOCATION,
+                    "location": raw_location,
                     "apply_url": raw_link,
                     "posted_at": (
                         time_tag.get("datetime") or time_tag.get_text(" ", strip=True)
@@ -355,6 +363,31 @@ def scrape_live_linkedin_jobs() -> list:
             print(f"[INFO] LinkedIn query failed ({query['keywords']}): {exc}")
 
     return all_jobs
+
+
+def is_target_location(location: str) -> bool:
+    """Accept Chennai-area listings only; reject other cities explicitly."""
+    value = (location or "").strip().lower()
+    if not value:
+        return False
+
+    # Explicitly reject common non-Chennai locations, especially Bengaluru.
+    other_city_markers = (
+        "bengaluru", "bangalore", "mumbai", "pune", "hyderabad",
+        "delhi", "new delhi", "gurugram", "gurgaon", "noida",
+        "kolkata", "kochi", "cochin", "thiruvananthapuram",
+        "trivandrum", "coimbatore", "madurai", "mysuru", "mysore",
+    )
+    if any(city in value for city in other_city_markers):
+        return False
+
+    # Chennai and common Chennai-area location labels.
+    chennai_markers = (
+        "chennai", "madras", "tambaram", "sholinganallur",
+        "siruseri", "guindy", "ambattur", "thoraipakkam",
+        "perungudi", "omr", "old mahabalipuram road",
+    )
+    return any(place in value for place in chennai_markers)
 
 
 def fetch_jobs_from_apify(token: str = None) -> list:
@@ -396,7 +429,8 @@ def fetch_jobs_from_apify(token: str = None) -> list:
                     or item.get("applyUrl") or item.get("url") or ""
                 )
                 # Do not trust a scraper result from a different city.
-                if CITY.lower() not in location.lower():
+                if not is_target_location(location):
+                    print(f"[INFO] Skipping non-Chennai Apify result: {title!r} — {location!r}")
                     continue
                 if not is_relevant_role(title):
                     continue
@@ -483,30 +517,4 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
             'font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;">'
             f'{html.escape(job["recency_label"])}</span>'
             if job["is_fresh"] else ""
-        )
-        skills = "".join(
-            '<span style="display:inline-block;background:#f1f5f9;color:#1e293b;'
-            'border:1px solid #e2e8f0;font-size:11px;font-weight:600;'
-            'padding:3px 8px;border-radius:6px;margin:2px 4px 2px 0;">'
-            f'{html.escape(skill)}</span>'
-            for skill in job["matched_skills"]
-        ) or '<span style="color:#64748b;font-size:12px;">No specific skills verified</span>'
-
-        description = (job.get("description") or "").strip()
-        if not description:
-            description = "Open the original listing to review the full responsibilities and requirements."
-        elif len(description) > 260:
-            description = description[:260].rstrip() + "…"
-
-        safe_title = html.escape(job["title"])
-        safe_company = html.escape(job["company"])
-        safe_location = html.escape(job["location"])
-        safe_type = html.escape(job["type"])
-        safe_description = html.escape(description)
-        safe_url = html.escape(job["apply_url"], quote=True)
-
-        cards.append(f"""
-        <div style="background:#fff;border:1px solid #e2e8f0;border-left:5px solid {color['border']};
-        border-radius:14px;padding:20px;margin-bottom:18px;">
-          <div style="margin-bottom:12px;">
-            <span style="background:{color['badge_bg']};color:#fff;font-size
+    
