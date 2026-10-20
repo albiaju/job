@@ -115,16 +115,8 @@ def get_resume_text(file_storage=None):
     return ""
 
 
-def preferred_location_bonus(job_location):
-    preferred_terms = [
-        "bengaluru", "bangalore", "chennai", "hyderabad", "kochi", "coimbatore",
-        "mysuru", "mysore", "trivandrum", "thiruvananthapuram", "vizag", "visakhapatnam",
-        "remote india", "india"
-    ]
-    location = (job_location or "").lower()
-    if any(term in location for term in preferred_terms):
-        return 20
-    return 0
+def is_chennai_location(job_location):
+    return "chennai" in (job_location or "").lower()
 
 
 def score_job(resume_text, job):
