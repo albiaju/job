@@ -200,24 +200,17 @@ def calculate_recency_score(posted_at: str) -> tuple:
 
 def clean_apply_url(url: str, title: str, company: str,
                     location: str = LOCATION) -> str:
-    """Use a supplied HTTP(S) link, or construct a LinkedIn search link."""
+    """Return a supplied HTTP(S) listing URL; never fabricate a job URL."""
     candidate = (url or "").strip()
+    parsed = urllib.parse.urlparse(candidate)
     if (
-        candidate.startswith(("https://", "http://"))
+        parsed.scheme in {"https", "http"}
+        and bool(parsed.netloc)
         and "sample" not in candidate.lower()
         and "example" not in candidate.lower()
     ):
         return candidate
-
-    keywords = " ".join(part for part in (title, company) if part)
-    return (
-        "https://www.linkedin.com/jobs/search/?"
-        + urllib.parse.urlencode({
-            "keywords": keywords or "Talent Acquisition Associate",
-            "location": location or LOCATION,
-            "f_TPR": "r86400",
-        })
-    )
+    return ""
 
 
 def score_job(job: dict) -> dict:
@@ -253,7 +246,8 @@ def score_job(job: dict) -> dict:
     result.update({
         "title": title or "Untitled role",
         "company": company or "Company not specified",
-        "location": location or LOCATION,
+        # Preserve the source location exactly; never relabel an unknown city as Chennai.
+        "location": location,
         "description": description,
         "type": job.get("type") or "Not specified",
         "score": total_score,
@@ -341,14 +335,18 @@ def scrape_live_linkedin_jobs() -> list:
                     location_tag.get_text(" ", strip=True)
                     if location_tag else ""
                 )
+                raw_company = company_tag.get_text(" ", strip=True) if company_tag else ""
                 if not is_target_location(raw_location):
-                    print(f"[INFO] Skipping non-Chennai LinkedIn result: {raw_title!r} — {raw_location!r}")
+                    print(f"[INFO] Skipping non-Chennai/unknown LinkedIn result: {raw_title!r} — {raw_location!r}")
+                    continue
+                if not raw_company or not clean_apply_url(raw_link, raw_title, raw_company, raw_location):
+                    print(f"[INFO] Skipping LinkedIn result missing company or direct URL: {raw_title!r}")
                     continue
 
                 seen_links.add(raw_link)
                 all_jobs.append({
                     "title": raw_title,
-                    "company": company_tag.get_text(" ", strip=True) if company_tag else "",
+                    "company": raw_company,
                     "location": raw_location,
                     "apply_url": raw_link,
                     "posted_at": (
@@ -366,12 +364,14 @@ def scrape_live_linkedin_jobs() -> list:
 
 
 def is_target_location(location: str) -> bool:
-    """Accept Chennai-area listings only; reject other cities explicitly."""
-    value = (location or "").strip().lower()
+    """Accept only listings explicitly located in Chennai or its nearby suburbs."""
+    value = re.sub(r"\s+", " ", (location or "").strip().lower())
     if not value:
         return False
 
-    # Explicitly reject common non-Chennai locations, especially Bengaluru.
+    # Remote, hybrid-with-unspecified-base, and explicit non-Chennai locations are not verified.
+    if any(term in value for term in ("remote", "anywhere", "multiple locations", "multiple cities")):
+        return False
     other_city_markers = (
         "bengaluru", "bangalore", "mumbai", "pune", "hyderabad",
         "delhi", "new delhi", "gurugram", "gurgaon", "noida",
@@ -381,13 +381,23 @@ def is_target_location(location: str) -> bool:
     if any(city in value for city in other_city_markers):
         return False
 
-    # Chennai and common Chennai-area location labels.
-    chennai_markers = (
-        "chennai", "madras", "tambaram", "sholinganallur",
-        "siruseri", "guindy", "ambattur", "thoraipakkam",
-        "perungudi", "omr", "old mahabalipuram road",
+    # Use whole-word/phrase matching to avoid broad false positives (e.g. "omr" in unrelated text).
+    chennai_patterns = (
+        r"\bchennai\b", r"\bmadras\b", r"\btambaram\b",
+        r"\bsholinganallur\b", r"\bsiruseri\b", r"\bguindy\b",
+        r"\bambattur\b", r"\bthoraipakkam\b", r"\bperungudi\b",
+        r"\bold mahabalipuram road\b", r"\bomr\b",
     )
-    return any(place in value for place in chennai_markers)
+    return any(re.search(pattern, value) for pattern in chennai_patterns)
+
+
+def is_valid_listing(job: dict) -> bool:
+    """Require a real-looking source URL and explicit title, company, and Chennai location."""
+    title = str(job.get("title") or "").strip()
+    company = str(job.get("company") or "").strip()
+    location = str(job.get("location") or "").strip()
+    url = clean_apply_url(job.get("apply_url", ""), title, company, location)
+    return bool(title and company and is_target_location(location) and url)
 
 
 def fetch_jobs_from_apify(token: str = None) -> list:
@@ -430,9 +440,12 @@ def fetch_jobs_from_apify(token: str = None) -> list:
                 )
                 # Do not trust a scraper result from a different city.
                 if not is_target_location(location):
-                    print(f"[INFO] Skipping non-Chennai Apify result: {title!r} — {location!r}")
+                    print(f"[INFO] Skipping non-Chennai/unknown Apify result: {title!r} — {location!r}")
                     continue
-                if not is_relevant_role(title):
+                if not is_relevant_role(title) or not title.strip() or not company.strip():
+                    continue
+                if not clean_apply_url(raw_url, title, company, location):
+                    print(f"[INFO] Skipping Apify result without a direct source URL: {title!r}")
                     continue
                 jobs.append({
                     "title": title,
@@ -517,4 +530,365 @@ def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int)
             'font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;">'
             f'{html.escape(job["recency_label"])}</span>'
             if job["is_fresh"] else ""
-    
+        )
+        skills = "".join(
+            '<span style="display:inline-block;background:#f1f5f9;color:#1e293b;'
+            'border:1px solid #e2e8f0;font-size:11px;font-weight:600;'
+            'padding:3px 8px;border-radius:6px;margin:2px 4px 2px 0;">'
+            f'{html.escape(skill)}</span>'
+            for skill in job["matched_skills"]
+        ) or '<span style="color:#64748b;font-size:12px;">No specific skills verified</span>'
+
+        description = (job.get("description") or "").strip()
+        if not description:
+            description = "Open the original listing to review the full responsibilities and requirements."
+        elif len(description) > 260:
+            description = description[:260].rstrip() + "…"
+
+        safe_title = html.escape(job["title"])
+        safe_company = html.escape(job["company"])
+        safe_location = html.escape(job["location"])
+        safe_type = html.escape(job["type"])
+        safe_description = html.escape(description)
+        safe_url = html.escape(job["apply_url"], quote=True)
+
+        cards.append(f"""
+        <div style="background:#fff;border:1px solid #e2e8f0;border-left:5px solid {color['border']};
+        border-radius:14px;padding:20px;margin-bottom:18px;">
+          <div style="margin-bottom:12px;">
+            <span style="background:{color['badge_bg']};color:#fff;font-size:11px;font-weight:700;
+            padding:4px 10px;border-radius:20px;">#{index} • {job['score']}% Match ({job['match_tier']})</span>
+            {top_badge} {fresh_badge}
+          </div>
+          <div style="display:flex;align-items:center;margin-bottom:10px;">
+            {get_company_avatar(job['company'])}
+            <div>
+              <h2 style="margin:0;font-size:18px;color:#0f172a;line-height:1.35;">{safe_title}</h2>
+              <div style="color:#475569;font-size:13px;font-weight:600;margin-top:4px;">
+                🏢 {safe_company} • 📍 {safe_location} • 💼 {safe_type}
+              </div>
+            </div>
+          </div>
+          <p style="color:#334155;font-size:13px;line-height:1.6;margin:10px 0 14px;">{safe_description}</p>
+          <div style="margin-bottom:16px;">
+            <div style="color:#64748b;font-size:11px;font-weight:700;margin-bottom:6px;">MATCHING SKILLS / KEYWORDS</div>
+            {skills}
+          </div>
+          <div style="text-align:right;">
+            <a href="{safe_url}" target="_blank" rel="noopener noreferrer"
+            style="background:#17153a;color:#fff;text-decoration:none;padding:10px 18px;
+            border-radius:8px;font-size:13px;font-weight:700;display:inline-block;">
+            View listing / apply →</a>
+          </div>
+        </div>
+        """)
+
+    if not ranked_jobs:
+        cards.append("""
+        <div style="padding:22px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;">
+          <strong>No verified matching listings were retrieved today.</strong>
+          <p style="margin-bottom:0;">The scraper may have been blocked or no matching Chennai postings were returned.
+          No sample or invented vacancies have been included. Try again later or check LinkedIn directly.</p>
+        </div>
+        """)
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Daily Chennai Career Digest</title></head>
+<body style="font-family:Arial,Helvetica,sans-serif;background:#f1f5f9;margin:0;padding:24px 10px;color:#1e293b;">
+<div style="max-width:660px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;">
+<div style="height:5px;background:linear-gradient(90deg,#10b981,#6366f1,#ec4899);"></div>
+<div style="background:#111827;padding:30px 22px;color:#fff;text-align:center;">
+<div style="font-size:11px;font-weight:700;letter-spacing:.8px;margin-bottom:10px;">DAILY CAREER DIGEST • {DAILY_TIME_IST} IST</div>
+<h1 style="margin:0 0 8px;font-size:25px;">🎯 Chennai Career Match Digest</h1>
+<p style="margin:0;color:#cbd5e1;font-size:13px;">{html.escape(date_str)} • HR, Talent Acquisition & Business roles</p>
+<p style="margin:12px 0 0;color:#e0e7ff;font-size:12px;">Tailored for Anosha Mariam Raji • BBA / HR Talent Acquisition</p>
+</div>
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;text-align:center;border-bottom:1px solid #e2e8f0;">
+<tr>
+<td style="padding:15px 5px;width:33%;"><strong style="font-size:22px;">{total_scraped}</strong><br><span style="font-size:11px;color:#64748b;">ROLES EVALUATED</span></td>
+<td style="padding:15px 5px;width:33%;"><strong style="font-size:22px;color:#059669;">{spam_count}</strong><br><span style="font-size:11px;color:#64748b;">SPAM FILTERED</span></td>
+<td style="padding:15px 5px;width:33%;"><strong style="font-size:22px;color:#4f46e5;">{len(ranked_jobs)}</strong><br><span style="font-size:11px;color:#64748b;">MATCHES SHOWN</span></td>
+</tr></table>
+<div style="padding:22px;">
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:18px;margin-bottom:22px;">
+<strong style="font-size:16px;color:#1e1b4b;">Hello Anosha! 👋</strong>
+<p style="font-size:13px;line-height:1.65;color:#334155;margin-bottom:8px;">
+Here are the retrieved matching HR, Talent Acquisition, Campus Hiring, HR Operations and Business Analytics listings for
+<strong>Chennai, Tamil Nadu</strong>. Listings are ranked using keyword matches, posting recency, employer preference and location.
+</p>
+<p style="font-size:12px;color:#475569;margin:0;">Important: scores are heuristic estimates, not guarantees of qualification or employer quality.
+Verify the job details and employer before applying.</p>
+</div>
+{''.join(cards)}
+<div style="background:#f8fafc;border-left:4px solid #6366f1;padding:15px;border-radius:6px;font-size:13px;line-height:1.6;color:#475569;">
+<strong>Recruiter tip:</strong> Highlight measurable hiring results, candidate response rates, time-to-hire,
+campus hiring coordination, Naukri sourcing, LeadSquared CRM and Excel experience where applicable.
+</div>
+</div>
+<div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:20px;text-align:center;font-size:12px;color:#64748b;">
+Automated Daily Career Digest • Chennai, Tamil Nadu<br>Prepared by Albi Aju
+</div></div></body></html>"""
+
+
+def generate_text_digest(ranked_jobs: list, spam_count: int, total_scraped: int) -> str:
+    date_str = datetime.now(IST).strftime("%A, %B %d, %Y")
+    lines = [
+        f"DAILY CHENNAI CAREER DIGEST — {date_str}",
+        "Tailored for Anosha Mariam Raji (BBA • HR Talent Acquisition)",
+        "=" * 60,
+        f"Roles evaluated: {total_scraped} | Spam filtered: {spam_count} | Matches: {len(ranked_jobs)}",
+        "",
+    ]
+    if not ranked_jobs:
+        lines.append(
+            "No verified matching listings were retrieved today. "
+            "The scraper may have been blocked or no matching Chennai postings were returned."
+        )
+    for index, job in enumerate(ranked_jobs, start=1):
+        lines.extend([
+            f"#{index}. {job['title']} — {job['company']}",
+            f"Match: {job['score']}% ({job['match_tier']})",
+            f"Location: {job['location']} | Type: {job['type']}",
+            f"Posted: {job['recency_label']}",
+            f"Matching skills: {', '.join(job['matched_skills']) or 'No specific skills verified'}",
+            f"Apply/view: {job['apply_url']}",
+            "-" * 60,
+        ])
+    lines.append("Verify the original listing and employer before applying.")
+    return "\n".join(lines)
+
+# =============================================================================
+# EMAIL DELIVERY
+# =============================================================================
+
+def get_gmail_service():
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from googleapiclient.discovery import build
+    except ImportError:
+        return None
+
+    scopes = ["https://www.googleapis.com/auth/gmail.send"]
+    creds = None
+    env_token = os.getenv("GMAIL_TOKEN_JSON")
+
+    if env_token:
+        try:
+            creds = Credentials.from_authorized_user_info(json.loads(env_token), scopes)
+        except Exception as exc:
+            print(f"[INFO] Could not parse GMAIL_TOKEN_JSON: {exc}")
+
+    if not creds and os.path.exists(GMAIL_TOKEN_FILE):
+        try:
+            creds = Credentials.from_authorized_user_file(GMAIL_TOKEN_FILE, scopes)
+        except Exception as exc:
+            print(f"[INFO] Could not read Gmail token file: {exc}")
+
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+            Path(GMAIL_TOKEN_FILE).write_text(creds.to_json(), encoding="utf-8")
+        except Exception as exc:
+            print(f"[INFO] Gmail token refresh failed: {exc}")
+            creds = None
+
+    if not creds:
+        if os.getenv("CI") or not sys.stdin.isatty():
+            return None
+
+        client_config = None
+        env_creds = os.getenv("GMAIL_CREDENTIALS_JSON")
+        if env_creds:
+            try:
+                client_config = json.loads(env_creds)
+            except Exception:
+                client_config = None
+
+        try:
+            if client_config:
+                flow = InstalledAppFlow.from_client_config(client_config, scopes)
+            elif os.path.exists(GMAIL_CREDENTIALS_FILE):
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    GMAIL_CREDENTIALS_FILE, scopes
+                )
+            else:
+                return None
+            creds = flow.run_local_server(port=0)
+            Path(GMAIL_TOKEN_FILE).write_text(creds.to_json(), encoding="utf-8")
+        except Exception as exc:
+            print(f"[INFO] Gmail OAuth setup failed: {exc}")
+            return None
+
+    return build("gmail", "v1", credentials=creds)
+
+
+def send_via_gmail_api(service, sender: str, recipient: str, subject: str,
+                       html_body: str, text_body: str) -> bool:
+    message = MIMEMultipart("alternative")
+    message["From"] = sender
+    message["To"] = recipient
+    message["Subject"] = subject
+    message.attach(MIMEText(text_body, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+    try:
+        service.users().messages().send(
+            userId="me", body={"raw": raw}
+        ).execute()
+        print(f"[OK] Email sent via Gmail API to {recipient}")
+        return True
+    except Exception as exc:
+        print(f"[ERROR] Gmail API send failed: {exc}")
+        return False
+
+
+def send_via_smtp(sender: str, recipient: str, subject: str,
+                  html_body: str, text_body: str) -> bool:
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com").strip()
+    try:
+        smtp_port = int(os.getenv("SMTP_PORT", "587").strip())
+    except ValueError:
+        smtp_port = 587
+    password = os.getenv("MAIL_PASSWORD", "").strip().replace(" ", "")
+    if not password:
+        print("[INFO] MAIL_PASSWORD is not configured.")
+        return False
+
+    message = MIMEMultipart("alternative")
+    message["From"] = sender
+    message["To"] = recipient
+    message["Subject"] = subject
+    message.attach(MIMEText(text_body, "plain", "utf-8"))
+    message.attach(MIMEText(html_body, "html", "utf-8"))
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(sender, password)
+            server.send_message(message)
+        print(f"[OK] Email sent via SMTP to {recipient}")
+        return True
+    except Exception as exc:
+        print(f"[ERROR] SMTP delivery failed: {exc}")
+        return False
+
+
+def dispatch_email(subject: str, html_body: str, text_body: str) -> bool:
+    print(f"[INFO] Preparing email from {SENDER_EMAIL} to {RECIPIENT_EMAIL}")
+    service = get_gmail_service()
+    if service and send_via_gmail_api(
+        service, SENDER_EMAIL, RECIPIENT_EMAIL, subject, html_body, text_body
+    ):
+        return True
+    if os.getenv("MAIL_PASSWORD"):
+        return send_via_smtp(
+            SENDER_EMAIL, RECIPIENT_EMAIL, subject, html_body, text_body
+        )
+    print("[ERROR] No usable Gmail API credentials or SMTP password configured.")
+    return False
+
+# =============================================================================
+# PIPELINE
+# =============================================================================
+
+def run_scraper_pipeline(dry_run: bool = False) -> list:
+    print("=" * 65)
+    print("DAILY CAREER DIGEST — CHENNAI, TAMIL NADU")
+    print(f"Run time: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    print("=" * 65)
+
+    raw_jobs = fetch_jobs_from_apify()
+    # Final location guard: no non-Chennai listing reaches the email.
+    before_location_filter = len(raw_jobs)
+    raw_jobs = [job for job in raw_jobs if is_valid_listing(job)]
+    rejected_locations = before_location_filter - len(raw_jobs)
+    if rejected_locations:
+        print(
+            f"[INFO] Final validation removed {rejected_locations} listing(s) with "
+            "non-Chennai/unknown location or missing title, company, or direct URL."
+        )
+
+    total_scraped = len(raw_jobs)
+    print(f"[INFO] Retrieved {total_scraped} Chennai candidate listings.")
+
+    clean_jobs = []
+    spam_jobs = []
+    for job in raw_jobs:
+        if is_blacklisted(job.get("company", "")):
+            spam_jobs.append(job)
+        else:
+            clean_jobs.append(job)
+
+    spam_count = len(spam_jobs)
+    if spam_jobs:
+        blocked = sorted({j.get("company", "") for j in spam_jobs if j.get("company")})
+        print(f"[INFO] Filtered blacklisted companies: {', '.join(blocked)}")
+
+    ranked_jobs = [score_job(job) for job in clean_jobs]
+    ranked_jobs.sort(key=lambda job: job["score"], reverse=True)
+    top_matches = ranked_jobs[:10]
+
+    print(f"[INFO] Top matches selected: {len(top_matches)}")
+    for index, job in enumerate(top_matches[:5], start=1):
+        print(f"  {index}. {job['title']} at {job['company']} — {job['score']}%")
+
+    date_for_subject = datetime.now(IST).strftime("%b %d")
+    subject = f"Chennai Career Digest: {len(top_matches)} HR & Business Matches ({date_for_subject})"
+    html_content = generate_html_digest(top_matches, spam_count, total_scraped)
+    text_content = generate_text_digest(top_matches, spam_count, total_scraped)
+
+    preview_file = BASE_DIR / "daily_jobs_preview.html"
+    preview_file.write_text(html_content, encoding="utf-8")
+    print(f"[INFO] HTML preview saved to: {preview_file}")
+
+    if dry_run:
+        print("[INFO] Dry run complete; no email was sent.")
+        return top_matches
+
+    if not dispatch_email(subject, html_content, text_content):
+        print("[ERROR] Email delivery failed.")
+    return top_matches
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Daily Chennai HR, Talent Acquisition and Business Job Digest"
+    )
+    parser.add_argument("--now", action="store_true",
+                        help="Run scraping and email immediately")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Scrape and generate preview without sending email")
+    parser.add_argument("--schedule", action="store_true",
+                        help="Run continuously at DAILY_TIME_IST every day")
+    args = parser.parse_args()
+
+    if args.now or args.dry_run:
+        run_scraper_pipeline(dry_run=args.dry_run)
+        return
+
+    try:
+        import schedule
+    except ImportError:
+        print("[INFO] 'schedule' package missing; running once.")
+        run_scraper_pipeline()
+        return
+
+    print(f"[INFO] Scheduler active: daily at {DAILY_TIME_IST} IST.")
+    print("Run once: python send_daily_jobs.py --now")
+    print("Preview only: python send_daily_jobs.py --dry-run")
+    print("Press Ctrl+C to stop.")
+    schedule.every().day.at(DAILY_TIME_IST).do(run_scraper_pipeline)
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(30)
+    except KeyboardInterrupt:
+        print("\n[INFO] Scheduler stopped.")
+
+
+if __name__ == "__main__":
+    main()
