@@ -1,13 +1,19 @@
 """
-🎯 Daily Career Scraper
-Automated Python script that scrapes fresh HR, Talent Acquisition, and Business
-roles from LinkedIn via Apify based on Anosha's resume (BBA, HR Recruitment,
-Campus Hiring, CRM & Analytics), filters spam companies, scores roles with bonuses
-for top employers in Bengaluru, and emails a color-coded morning digest at 7:00 AM IST.
+Daily Career Scraper — Chennai Edition
+Fetches HR, Talent Acquisition, Campus Hiring, HR Operations, and Business
+Analytics roles for Anosha's profile, scores and filters listings, then
+creates an HTML/text email digest.
+
+Important:
+- LinkedIn guest-page scraping can be blocked or change without notice.
+- Apify actor input/output fields may vary by actor version.
+- No fabricated sample vacancies are sent if live scraping fails.
+- Default schedule: 8:00 PM IST (set DAILY_TIME_IST=07:00 for 7 AM).
 """
 
 import argparse
 import base64
+import html
 import json
 import os
 import re
@@ -19,8 +25,10 @@ from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-# Ensure UTF-8 output on Windows consoles
+from dotenv import load_dotenv
+
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -28,168 +36,116 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
-from dotenv import load_dotenv
-
-# Load local environment variables
 load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent
+IST = ZoneInfo("Asia/Kolkata")
 
-# ==============================================================================
-# ⚙️ CONFIGURATION SECTION
-# Tailored for Anosha Mariam (BBA in Finance & Business Analytics,
-# HR Talent Acquisition Associate with experience in Campus Hiring, Naukri, LeadSquared CRM, Excel)
-# ==============================================================================
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 
-# Email recipients
-SENDER_EMAIL = os.getenv("SENDER_EMAIL") or os.getenv("MAIL_USERNAME") or "albiaju2001@gmail.com"
-RECIPIENT_EMAIL = os.getenv("RECIPIENT_EMAIL") or os.getenv("TO_EMAIL") or "anoshamariam075@gmail.com"
+SENDER_EMAIL = (
+    os.getenv("SENDER_EMAIL")
+    or os.getenv("MAIL_USERNAME")
+    or "albiaju2001@gmail.com"
+)
+RECIPIENT_EMAIL = (
+    os.getenv("RECIPIENT_EMAIL")
+    or os.getenv("TO_EMAIL")
+    or "anoshamariam075@gmail.com"
+)
 
-# Apify Token & Actor configuration
 APIFY_TOKEN = os.getenv("APIFY_TOKEN", "")
-APIFY_ACTOR_ID = os.getenv("APIFY_ACTOR_ID", "curious_coder/linkedin-jobs-scraper")
+APIFY_ACTOR_ID = os.getenv(
+    "APIFY_ACTOR_ID", "curious_coder/linkedin-jobs-scraper"
+)
 
-# Resume path (automatically detects Resume_anosha.pdf in project directory)
 DEFAULT_RESUME_PATH = BASE_DIR / "Resume_anosha.pdf"
-RESUME_PATH = os.getenv("RESUME_PATH") or (str(DEFAULT_RESUME_PATH) if DEFAULT_RESUME_PATH.exists() else "")
+RESUME_PATH = os.getenv("RESUME_PATH") or (
+    str(DEFAULT_RESUME_PATH) if DEFAULT_RESUME_PATH.exists() else ""
+)
 
-# Gmail API configuration files
-GMAIL_CREDENTIALS_FILE = os.getenv("GMAIL_CREDENTIALS_FILE", "gmail_credentials.json")
+GMAIL_CREDENTIALS_FILE = os.getenv(
+    "GMAIL_CREDENTIALS_FILE", "gmail_credentials.json"
+)
 GMAIL_TOKEN_FILE = os.getenv("GMAIL_TOKEN_FILE", "token.json")
 
-# Schedule time (IST is UTC+5:30) - 8:00 PM IST
+# 24-hour format in Asia/Kolkata. Set DAILY_TIME_IST=07:00 for 7 AM.
 DAILY_TIME_IST = os.getenv("DAILY_TIME_IST", "20:00")
+CITY = "Chennai"
+STATE = "Tamil Nadu"
+LOCATION = f"{CITY}, {STATE}"
 
-# 🚫 COMPANY BLACKLIST: Known spam companies, unpaid internships, or deceptive recruiters
 COMPANY_BLACKLIST = [
-    "mindrift",
-    "crossover",
-    "outlier",
-    "dataannotation",
-    "bairesdev",
-    "revature",
-    "turing",
-    "epic recruitment",
-    "hiretalent",
-    "dice",
-    "apex systems",
-    "jobot",
-    "teksystems",
-    "cybercoders",
-    "varite",
-    "infotree",
-    "vaco"
+    "mindrift", "crossover", "outlier", "dataannotation", "bairesdev",
+    "revature", "turing", "epic recruitment", "hiretalent", "dice",
+    "apex systems", "jobot", "teksystems", "cybercoders", "varite",
+    "infotree", "vaco",
 ]
 
-# 🌟 GOOD COMPANIES: Top employers & tech giants in Bengaluru offering strong HR & Business careers
-# Receives a massive score boost (+30 points)
 GOOD_COMPANIES = [
-    "google",
-    "amazon",
-    "microsoft",
-    "flipkart",
-    "deloitte",
-    "swiggy",
-    "zomato",
-    "pwc",
-    "ey",
-    "kpmg",
-    "accenture",
-    "kalvium",
-    "infosys",
-    "wipro",
-    "tcs",
-    "phonepe",
-    "razorpay",
-    "cred",
-    "meesho",
-    "uber",
-    "target",
-    "walmart",
-    "cisco",
-    "linkedin",
-    "goldman sachs",
-    "morgan stanley",
-    "apple",
-    "meta"
+    "google", "amazon", "microsoft", "flipkart", "deloitte", "swiggy",
+    "zomato", "pwc", "ey", "kpmg", "accenture", "kalvium", "infosys",
+    "wipro", "tcs", "phonepe", "razorpay", "cred", "meesho", "uber",
+    "target", "walmart", "cisco", "linkedin", "goldman sachs",
+    "morgan stanley", "apple", "meta",
 ]
 
-# 🎯 TARGET SKILLS: Matching Anosha's BBA, HR recruitment, campus hiring & analytics background
 TARGET_SKILLS = [
-    # Core HR & Recruitment
-    "talent acquisition", "recruitment", "sourcing", "screening", "resume screening",
-    "interview coordination", "hr screening", "onboarding", "campus hiring",
-    "hr operations", "candidate experience", "job description", "job posting",
-    "talent sourcing", "hiring", "headhunting", "people operations", "hr recruiter",
-    "recruiter", "talent partner", "hr associate",
-    
-    # Tools & Platforms
-    "naukri", "linkedin", "leadsquared", "crm", "excel", "advanced excel",
-    "power bi", "ms excel", "ats", "workday", "spreadsheets",
-    
-    # Education & Business Analytics
-    "bba", "business administration", "business analytics", "data visualization",
-    "analytics", "finance", "communication", "stakeholder management"
+    "talent acquisition", "recruitment", "sourcing", "screening",
+    "resume screening", "interview coordination", "hr screening",
+    "onboarding", "campus hiring", "hr operations", "candidate experience",
+    "job description", "job posting", "talent sourcing", "hiring",
+    "headhunting", "people operations", "hr recruiter", "recruiter",
+    "talent partner", "hr associate", "naukri", "linkedin", "leadsquared",
+    "crm", "excel", "advanced excel", "power bi", "ms excel", "ats",
+    "workday", "spreadsheets", "bba", "business administration",
+    "business analytics", "data visualization", "analytics", "finance",
+    "communication", "stakeholder management",
 ]
 
-# Default search queries tailored for HR & Business roles in Bengaluru
 SEARCH_QUERIES = [
-    {"keywords": "Talent Acquisition Associate", "location": "Bengaluru, Karnataka"},
-    {"keywords": "HR Recruiter", "location": "Bengaluru, Karnataka"},
-    {"keywords": "Campus Hiring Coordinator", "location": "Bengaluru, Karnataka"},
-    {"keywords": "HR Operations Specialist", "location": "Bengaluru, Karnataka"},
-    {"keywords": "Junior Business Analyst", "location": "Bengaluru, Karnataka"},
+    {"keywords": "Talent Acquisition Associate", "location": LOCATION},
+    {"keywords": "HR Recruiter", "location": LOCATION},
+    {"keywords": "Campus Hiring Coordinator", "location": LOCATION},
+    {"keywords": "HR Operations Specialist", "location": LOCATION},
+    {"keywords": "Junior Business Analyst", "location": LOCATION},
 ]
 
-
-# ==============================================================================
-# 📄 RESUME LOADER
-# ==============================================================================
+# =============================================================================
+# RESUME
+# =============================================================================
 
 def load_resume_text(file_path: str = None) -> str:
-    """Extracts text from the candidate's PDF resume if present."""
-    path_to_check = Path(file_path) if file_path else DEFAULT_RESUME_PATH
-    if not path_to_check.exists():
+    """Extract text from a PDF resume if present."""
+    path = Path(file_path) if file_path else (
+        Path(RESUME_PATH) if RESUME_PATH else DEFAULT_RESUME_PATH
+    )
+    if not path.exists():
         return ""
-
     try:
         from pypdf import PdfReader
-        reader = PdfReader(str(path_to_check))
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        return text.strip()
+        reader = PdfReader(str(path))
+        return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
     except Exception as exc:
-        print(f"[ℹ️] Notice reading resume ({exc}). Using profile keywords.")
+        print(f"[INFO] Could not read resume ({exc}); using configured keywords.")
         return ""
 
-
-# ==============================================================================
-# 🧹 SPAM FILTERING & SMART SCORING
-# ==============================================================================
+# =============================================================================
+# FILTERING AND SCORING
+# =============================================================================
 
 def is_blacklisted(company_name: str) -> bool:
-    """Check if the company name matches any blacklisted spam company."""
-    if not company_name:
-        return False
-    clean_name = company_name.strip().lower()
-    for spam_company in COMPANY_BLACKLIST:
-        if spam_company in clean_name:
-            return True
-    return False
+    clean_name = (company_name or "").strip().lower()
+    return any(spam in clean_name for spam in COMPANY_BLACKLIST)
 
 
 def is_good_company(company_name: str) -> bool:
-    """Check if the company is in the top employer bonus list."""
-    if not company_name:
-        return False
-    clean_name = company_name.strip().lower()
-    for top_tier in GOOD_COMPANIES:
-        if top_tier in clean_name:
-            return True
-    return False
+    clean_name = (company_name or "").strip().lower()
+    return any(name in clean_name for name in GOOD_COMPANIES)
 
 
 def extract_matched_skills(text: str) -> list:
-    """Identify skills from TARGET_SKILLS present in the job description or title."""
     if not text:
         return []
     text_lower = f" {text.lower()} "
@@ -197,866 +153,360 @@ def extract_matched_skills(text: str) -> list:
     for skill in TARGET_SKILLS:
         pattern = r"(?:\b|_)" + re.escape(skill) + r"(?:\b|_)"
         if re.search(pattern, text_lower):
-            # Casing normalization
-            if skill in ["bba", "crm", "ats", "hr"]:
-                matched.append(skill.upper())
-            elif skill in ["power bi", "leadsquared"]:
-                matched.append("Power BI" if skill == "power bi" else "LeadSquared CRM")
+            if skill in {"bba", "crm", "ats", "hr"}:
+                display = skill.upper()
+            elif skill == "power bi":
+                display = "Power BI"
+            elif skill == "leadsquared":
+                display = "LeadSquared CRM"
             else:
-                matched.append(skill.title())
-    return sorted(list(set(matched)))
+                display = skill.title()
+            matched.append(display)
+    return sorted(set(matched))
 
 
 def calculate_recency_score(posted_at: str) -> tuple:
-    """
-    Calculate recency bonus and descriptive badge.
-    Returns (points, is_fresh_24h, label)
-    """
+    """Return (points, is_fresh_24h, label)."""
     if not posted_at:
-        return 6, False, "Recently posted"
+        return 6, False, "Posting date unavailable"
 
-    val = str(posted_at).lower().strip()
+    value = str(posted_at).lower().strip()
+    if any(word in value for word in (
+        "hour", "minute", "just now", "today", "seconds", "1d"
+    )):
+        return 20, True, "Posted within about 24 hours"
+    if "yesterday" in value or "1 day" in value:
+        return 18, True, "Posted yesterday"
+    if any(f"{day} day" in value for day in (2, 3)):
+        return 12, False, "Posted 2–3 days ago"
+    if any(f"{day} day" in value for day in range(4, 8)) or "1 week" in value:
+        return 6, False, "Posted this week"
 
-    # Extremely fresh (today, hours ago, minutes ago)
-    if any(k in val for k in ["hour", "minute", "just now", "today", "seconds"]):
-        return 20, True, "🔥 Posted <24h ago"
-    if "1 day" in val or "yesterday" in val:
-        return 18, True, "🔥 Posted yesterday"
-    if any(f"{d} day" in val for d in range(2, 4)):
-        return 12, False, "⚡ Posted 2-3 days ago"
-    if any(f"{d} day" in val for d in range(4, 8)) or "1 week" in val:
-        return 6, False, "📅 Posted this week"
-
-    # Try parsing ISO format if present
     try:
-        dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
-        now = datetime.now(timezone.utc)
-        diff_days = (now - dt).days
-        if diff_days <= 1:
-            return 20, True, "🔥 Posted <24h ago"
-        elif diff_days <= 3:
-            return 12, False, f"⚡ Posted {diff_days}d ago"
-        elif diff_days <= 7:
-            return 6, False, f"📅 Posted {diff_days}d ago"
-    except Exception:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age_hours = (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 3600
+        if 0 <= age_hours <= 24:
+            return 20, True, "Posted within about 24 hours"
+        if 24 < age_hours <= 72:
+            return 12, False, "Posted 1–3 days ago"
+        if 72 < age_hours <= 168:
+            return 6, False, "Posted this week"
+    except (ValueError, TypeError):
         pass
+    return 6, False, "Posting date unavailable"
 
-    return 6, False, "Recently posted"
 
+def clean_apply_url(url: str, title: str, company: str,
+                    location: str = LOCATION) -> str:
+    """Use a supplied HTTP(S) link, or construct a LinkedIn search link."""
+    candidate = (url or "").strip()
+    if (
+        candidate.startswith(("https://", "http://"))
+        and "sample" not in candidate.lower()
+        and "example" not in candidate.lower()
+    ):
+        return candidate
 
-def clean_apply_url(url: str, title: str, company: str, location: str = "Bengaluru") -> str:
-    """
-    Ensures that every apply link is 100% functional and clickable.
-    If the link is a placeholder or broken sample, converts it into a live LinkedIn job search link.
-    """
-    if url and url.startswith("http") and "sample" not in url and "example" not in url:
-        return url
-
-    # Generate a real, live LinkedIn search URL that opens active matching jobs
-    query_parts = [title, company]
-    keywords = " ".join(part for part in query_parts if part and "sample" not in part.lower())
-    encoded_keywords = urllib.parse.quote(keywords or "Talent Acquisition Associate")
-    encoded_location = urllib.parse.quote(location or "Bengaluru, Karnataka")
-    return f"https://www.linkedin.com/jobs/search/?keywords={encoded_keywords}&location={encoded_location}&f_TPR=r86400"
+    keywords = " ".join(part for part in (title, company) if part)
+    return (
+        "https://www.linkedin.com/jobs/search/?"
+        + urllib.parse.urlencode({
+            "keywords": keywords or "Talent Acquisition Associate",
+            "location": location or LOCATION,
+            "f_TPR": "r86400",
+        })
+    )
 
 
 def score_job(job: dict) -> dict:
-    """
-    Ranks a job based on Anosha's profile:
-    - HR / Talent Acquisition / BBA skill keyword matches (up to 50 pts)
-    - Recency bonus (up to 20 pts)
-    - Top employer bonus (+30 pts)
-    - Location preference for Bengaluru (+10 pts)
-    Total score capped at 100.
-    """
-    title = job.get("title", "")
-    description = job.get("description", "")
-    company = job.get("company", "")
-    location = job.get("location", "")
-    posted_at = job.get("posted_at", "")
-    apply_url = job.get("apply_url", "")
-
+    title = str(job.get("title") or "")
+    description = str(job.get("description") or "")
+    company = str(job.get("company") or "")
+    location = str(job.get("location") or "")
+    posted_at = str(job.get("posted_at") or "")
     full_text = f"{title} {description} {location}"
     matched_skills = extract_matched_skills(full_text)
 
-    # 1. Skill Score: 8 pts per matched skill, up to 50 pts
     skill_points = min(50, len(matched_skills) * 9)
-
-    # 2. Recency Score: up to 20 pts
     recency_points, is_fresh, recency_label = calculate_recency_score(posted_at)
-
-    # 3. Top Employer Tier Bonus: +30 pts for Google, Amazon, Deloitte, Swiggy, Kalvium, etc.
     top_tier = is_good_company(company)
     company_bonus = 30 if top_tier else 0
-
-    # 4. Bengaluru Location Bonus: +10 pts
-    location_bonus = 10 if ("bengaluru" in location.lower() or "bangalore" in location.lower()) else 0
-
+    location_bonus = 10 if CITY.lower() in location.lower() else 0
     total_score = min(100, skill_points + recency_points + company_bonus + location_bonus)
 
-    # Color classification:
-    # 🟢 Emerald: 80 - 100 (High Match)
-    # 🔵 Indigo/Blue: 60 - 79 (Strong Match)
-    # 🟡 Amber: < 60 (Good Match)
     if total_score >= 80:
-        match_tier = "High Match"
-        color_theme = {"bg": "#ecfdf5", "border": "#10b981", "badge_bg": "#059669", "badge_text": "#ffffff"}
+        tier = "High Match"
+        color = {"bg": "#ecfdf5", "border": "#10b981",
+                 "badge_bg": "#059669", "badge_text": "#ffffff"}
     elif total_score >= 60:
-        match_tier = "Strong Match"
-        color_theme = {"bg": "#eff6ff", "border": "#3b82f6", "badge_bg": "#2563eb", "badge_text": "#ffffff"}
+        tier = "Strong Match"
+        color = {"bg": "#eff6ff", "border": "#3b82f6",
+                 "badge_bg": "#2563eb", "badge_text": "#ffffff"}
     else:
-        match_tier = "Good Match"
-        color_theme = {"bg": "#fffbeb", "border": "#f59e0b", "badge_bg": "#d97706", "badge_text": "#ffffff"}
+        tier = "Good Match"
+        color = {"bg": "#fffbeb", "border": "#f59e0b",
+                 "badge_bg": "#d97706", "badge_text": "#ffffff"}
 
-    # Ensure link is 100% active and working
-    working_apply_url = clean_apply_url(apply_url, title, company, location)
-
-    enriched_job = dict(job)
-    enriched_job.update({
+    result = dict(job)
+    result.update({
+        "title": title or "Untitled role",
+        "company": company or "Company not specified",
+        "location": location or LOCATION,
+        "description": description,
+        "type": job.get("type") or "Not specified",
         "score": total_score,
-        "apply_url": working_apply_url,
+        "apply_url": clean_apply_url(job.get("apply_url", ""), title, company, location),
         "matched_skills": matched_skills,
         "is_top_tier": top_tier,
         "is_fresh": is_fresh,
         "recency_label": recency_label,
-        "match_tier": match_tier,
-        "color_theme": color_theme,
+        "match_tier": tier,
+        "color_theme": color,
     })
-    return enriched_job
+    return result
 
-
-# ==============================================================================
-# 🕸️ APIFY SCRAPER & REALISTIC CURATED DATASET
-# ==============================================================================
-# 🕸️ LIVE LINKEDIN & APIFY SCRAPER
-# ==============================================================================
+# =============================================================================
+# LIVE SCRAPING
+# =============================================================================
 
 def is_relevant_role(title: str) -> bool:
-    """Ensures scraped roles are strictly HR, Talent Acquisition, Recruiting, or Business Analytics."""
     title_lower = (title or "").lower()
     hr_terms = [
         "hr", "human resource", "talent", "recruiter", "recruitment",
         "hiring", "sourcing", "people", "staffing", "onboarding",
         "campus", "business analyst", "analytics", "operations associate",
-        "talent partner", "hr associate"
+        "talent partner", "hr associate",
     ]
     exclude_terms = [
         "exchange", "o365", "software engineer", "devops", "cloud engineer",
-        "java", ".net", "technician", "electrician", "hardware", "civil"
+        "java", ".net", "technician", "electrician", "hardware", "civil",
     ]
-    if any(ex in title_lower for ex in exclude_terms):
-        return False
-    return any(term in title_lower for term in hr_terms)
+    return not any(term in title_lower for term in exclude_terms) and any(
+        term in title_lower for term in hr_terms
+    )
 
 
 def scrape_live_linkedin_jobs() -> list:
-    """
-    Directly scrapes real-time live LinkedIn job postings from the public guest API.
-    Zero token cost, pulls fresh roles posted in the last 24h in Bengaluru.
-    """
-    import html
+    """Fetch public LinkedIn guest-search results; may be blocked by LinkedIn."""
     import requests
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
         "Accept-Language": "en-US,en;q=0.9",
     }
     all_jobs = []
     seen_links = set()
 
-    for q in SEARCH_QUERIES:
-        query_str = urllib.parse.quote(q["keywords"])
-        loc_str = urllib.parse.quote(q["location"])
-        url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={query_str}&location={loc_str}&f_TPR=r86400"
-
+    for query in SEARCH_QUERIES:
+        params = {
+            "keywords": query["keywords"],
+            "location": query["location"],
+            "f_TPR": "r86400",
+        }
+        url = (
+            "https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?"
+            + urllib.parse.urlencode(params)
+        )
         try:
-            res = requests.get(url, headers=headers, timeout=15)
-            if res.status_code != 200:
+            response = requests.get(url, headers=headers, timeout=20)
+            if response.status_code != 200:
+                print(f"[INFO] LinkedIn query returned HTTP {response.status_code}: {query['keywords']}")
                 continue
 
-            links = re.findall(r'<a class="base-card__full-link[^\"]*" href="([^\"]*)"', res.text)
-            titles = re.findall(r'<h3 class="base-search-card__title">([\s\S]*?)</h3>', res.text)
-            companies = re.findall(r'<h4 class="base-search-card__subtitle">([\s\S]*?)</h4>', res.text)
-            locations = re.findall(r'<span class="job-search-card__location">([\s\S]*?)</span>', res.text)
-            times = re.findall(r'<time class="job-search-card__listdate[^\"]*"[^>]*>([\s\S]*?)</time>', res.text)
+            # Parse cards with BeautifulSoup to avoid fragile parallel regex arrays.
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.text, "html.parser")
+            cards = soup.select("li")
+            for card in cards:
+                link_tag = card.select_one("a.base-card__full-link")
+                title_tag = card.select_one("h3.base-search-card__title")
+                company_tag = card.select_one("h4.base-search-card__subtitle")
+                location_tag = card.select_one("span.job-search-card__location")
+                time_tag = card.select_one("time")
 
-            for i in range(len(titles)):
-                raw_title = html.unescape(re.sub(r'<[^>]+>', '', titles[i])).strip()
-                raw_company = html.unescape(re.sub(r'<[^>]+>', '', companies[i])).strip() if i < len(companies) else "Bengaluru Employer"
-                raw_loc = html.unescape(re.sub(r'<[^>]+>', '', locations[i])).strip() if i < len(locations) else "Bengaluru, Karnataka"
-                raw_link = links[i].split("?")[0] if i < len(links) else ""
-                posted_str = html.unescape(re.sub(r'<[^>]+>', '', times[i])).strip() if i < len(times) else "today"
+                if not link_tag or not title_tag:
+                    continue
+                raw_link = (link_tag.get("href") or "").split("?")[0]
+                raw_title = title_tag.get_text(" ", strip=True)
+                if not raw_link or raw_link in seen_links or not is_relevant_role(raw_title):
+                    continue
 
-                if not raw_link or raw_link in seen_links:
-                    continue
-                if not is_relevant_role(raw_title):
-                    continue
                 seen_links.add(raw_link)
-
                 all_jobs.append({
                     "title": raw_title,
-                    "company": raw_company,
-                    "location": raw_loc,
+                    "company": company_tag.get_text(" ", strip=True) if company_tag else "",
+                    "location": location_tag.get_text(" ", strip=True) if location_tag else LOCATION,
                     "apply_url": raw_link,
-                    "posted_at": posted_str,
-                    "description": f"{raw_title} position at {raw_company} in {raw_loc}. Focused on candidate sourcing, screening, interview coordination, and HR operations.",
-                    "type": "Full-time"
+                    "posted_at": (
+                        time_tag.get("datetime") or time_tag.get_text(" ", strip=True)
+                        if time_tag else ""
+                    ),
+                    # Do not invent job-description skills when the description is unavailable.
+                    "description": "",
+                    "type": "Not specified",
                 })
-        except Exception as e:
-            print(f"[ℹ️] Notice on live query ({q['keywords']}): {e}")
+        except Exception as exc:
+            print(f"[INFO] LinkedIn query failed ({query['keywords']}): {exc}")
 
     return all_jobs
 
 
 def fetch_jobs_from_apify(token: str = None) -> list:
-    """
-    Pulls recent HR, Talent Acquisition, and Business Analyst jobs from LinkedIn.
-    1. Tries Apify if token is provided.
-    2. Automatically uses direct live LinkedIn scraping if Apify fails or has no credits.
-    3. Falls back to curated dataset only if completely offline.
-    """
+    """Try Apify first, then LinkedIn guest search. No fabricated fallback listings."""
     token = token or APIFY_TOKEN
-    live_jobs = []
+    jobs = []
 
-    # 1. Try Apify if token available
-    if token and token.strip():
+    if token.strip():
         try:
             from apify_client import ApifyClient
             client = ApifyClient(token)
-            print(f"[🚀] Initiating Apify scraper for HR & Talent Acquisition roles in Bengaluru...")
-
+            print("[INFO] Starting Apify job scraper for Chennai...")
             search_urls = [
-                "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Associate&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
-                "https://www.linkedin.com/jobs/search/?keywords=HR%20Recruiter&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
-                "https://www.linkedin.com/jobs/search/?keywords=Campus%20Hiring%20Coordinator&location=Bengaluru%2C%20Karnataka&f_TPR=r86400",
+                "https://www.linkedin.com/jobs/search/?"
+                + urllib.parse.urlencode({
+                    "keywords": q["keywords"],
+                    "location": q["location"],
+                    "f_TPR": "r86400",
+                })
+                for q in SEARCH_QUERIES
             ]
-
             run_input = {
                 "urls": search_urls,
                 "keywords": "Talent Acquisition Associate",
-                "location": "Bengaluru, Karnataka, India",
+                "location": f"{CITY}, {STATE}, India",
                 "datePosted": "past24Hours",
                 "limitPerSource": 15,
             }
-
-            run = client.actor(APIFY_ACTOR_ID).call(run_input=run_input, timeout_secs=120)
+            run = client.actor(APIFY_ACTOR_ID).call(
+                run_input=run_input, timeout_secs=120
+            )
             items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
-            print(f"[✅] Successfully scraped {len(items)} raw listings from Apify.")
-
-            for it in items:
-                title = it.get("title") or it.get("jobTitle") or "Talent Acquisition Associate"
-                company = it.get("companyName") or it.get("company") or "Bengaluru Employer"
-                location = it.get("location") or it.get("formattedLocation") or "Bengaluru, Karnataka"
-                raw_url = it.get("link") or it.get("jobUrl") or it.get("applyUrl") or it.get("url") or ""
-
-                live_jobs.append({
+            for item in items:
+                title = item.get("title") or item.get("jobTitle") or ""
+                company = item.get("companyName") or item.get("company") or ""
+                location = item.get("location") or item.get("formattedLocation") or ""
+                raw_url = (
+                    item.get("link") or item.get("jobUrl")
+                    or item.get("applyUrl") or item.get("url") or ""
+                )
+                # Do not trust a scraper result from a different city.
+                if CITY.lower() not in location.lower():
+                    continue
+                if not is_relevant_role(title):
+                    continue
+                jobs.append({
                     "title": title,
                     "company": company,
                     "location": location,
-                    "apply_url": clean_apply_url(raw_url, title, company, location),
-                    "posted_at": it.get("postedAt") or it.get("postDate") or "today",
-                    "description": it.get("descriptionText") or it.get("description") or it.get("jobDescription") or "",
-                    "type": it.get("employmentType") or "Full-time"
+                    "apply_url": raw_url,
+                    "posted_at": item.get("postedAt") or item.get("postDate") or "",
+                    "description": (
+                        item.get("descriptionText") or item.get("description")
+                        or item.get("jobDescription") or ""
+                    ),
+                    "type": item.get("employmentType") or "Not specified",
                 })
+            print(f"[INFO] Apify returned {len(jobs)} matching Chennai listings.")
         except Exception as exc:
-            print(f"[⚠️] Apify client notice ({exc}). Switching to direct live LinkedIn scraper...")
+            print(f"[INFO] Apify failed; switching to LinkedIn guest search: {exc}")
 
-    # 2. If Apify returned no jobs or had an error, use live direct LinkedIn scraper
-    if not live_jobs:
-        print("[🌐] Fetching real-time live jobs directly from LinkedIn...")
-        live_jobs = scrape_live_linkedin_jobs()
-        if live_jobs:
-            print(f"[✅] Successfully fetched {len(live_jobs)} live job postings from LinkedIn!")
+    if not jobs:
+        print("[INFO] Fetching Chennai listings from LinkedIn guest search...")
+        jobs = scrape_live_linkedin_jobs()
 
-    # 3. If live scraping also returned nothing (e.g. offline), use curated dataset
-    return live_jobs if live_jobs else get_sample_jobs()
+    # De-duplicate by URL and title/company/location.
+    deduplicated = []
+    seen = set()
+    for job in jobs:
+        key = (
+            job.get("apply_url") or "",
+            job.get("title", "").lower(),
+            job.get("company", "").lower(),
+            job.get("location", "").lower(),
+        )
+        if key not in seen:
+            seen.add(key)
+            deduplicated.append(job)
+    return deduplicated
 
-
-def get_sample_jobs() -> list:
-    """
-    Curated HR & Talent Acquisition listings tailored for Anosha's profile.
-    All URLs are live, working LinkedIn search/listing links in Bengaluru!
-    """
-    return [
-        {
-            "title": "Talent Acquisition Associate",
-            "company": "Kalvium",
-            "location": "Bengaluru, Karnataka",
-            "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Associate%20Kalvium&location=Bengaluru%2C%20Karnataka",
-            "posted_at": "3 hours ago",
-            "type": "Full-time",
-            "description": "Join our growing hiring team to manage end-to-end recruitment, resume screening, candidate sourcing on Naukri and LinkedIn, interview coordination, and candidate onboarding using LeadSquared CRM and Excel."
-        },
-        {
-            "title": "HR Recruiter - Talent Acquisition",
-            "company": "Amazon",
-            "location": "Bengaluru, Karnataka",
-            "apply_url": "https://www.linkedin.com/jobs/search/?keywords=HR%20Recruiter%20Amazon&location=Bengaluru%2C%20Karnataka",
-            "posted_at": "Just now",
-            "type": "Full-time",
-            "description": "Seeking an HR Recruiter to source and screen top talent for business operations. Requires experience in LinkedIn recruiter, Naukri job posting, scheduling interviews with hiring managers, and maintaining recruitment trackers."
-        },
-        {
-            "title": "Campus Hiring Coordinator",
-            "company": "Deloitte",
-            "location": "Bengaluru, Karnataka",
-            "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Campus%20Hiring%20Coordinator%20Deloitte&location=Bengaluru%2C%20Karnataka",
-            "posted_at": "2 hours ago",
-            "type": "Full-time",
-            "description": "Collaborate with university placement cells, coordinate campus recruitment drives, organize assessments, and manage candidate communication and onboarding processes. BBA graduates preferred."
-        },
-        {
-            "title": "HR Operations & People Analytics Associate",
-            "company": "Flipkart",
-            "location": "Bengaluru, Karnataka",
-            "apply_url": "https://www.linkedin.com/jobs/search/?keywords=HR%20Operations%20Flipkart&location=Bengaluru%2C%20Karnataka",
-            "posted_at": "Yesterday",
-            "type": "Full-time",
-            "description": "Manage recruitment pipeline reports, onboarding documentation, and talent acquisition analytics. Requires strong proficiency in Advanced Excel, Power BI, and HR CRM systems."
-        },
-        {
-            "title": "Freelance Data Evaluator (SPAM EXAMPLE - WILL BE FILTERED)",
-            "company": "Outlier",
-            "location": "Remote",
-            "apply_url": "https://www.linkedin.com/jobs",
-            "posted_at": "1 hour ago",
-            "type": "Contract",
-            "description": "Unverified contract task work."
-        },
-        {
-            "title": "Automated Workforce Hire (SPAM EXAMPLE - WILL BE FILTERED)",
-            "company": "Crossover",
-            "location": "Remote",
-            "apply_url": "https://www.linkedin.com/jobs",
-            "posted_at": "2 hours ago",
-            "type": "Full-time",
-            "description": "High-turnover surveillance contract."
-        },
-        {
-            "title": "Talent Sourcing Specialist",
-            "company": "Swiggy",
-            "location": "Bengaluru, Karnataka",
-            "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Swiggy&location=Bengaluru%2C%20Karnataka",
-            "posted_at": "Yesterday",
-            "type": "Full-time",
-            "description": "Drive talent acquisition initiatives across business functions. Screen resumes, conduct initial HR interviews, coordinate interview schedules, and ensure positive candidate experience."
-        },
-        {
-            "title": "Junior Business & HR Analyst",
-            "company": "PhonePe",
-            "location": "Bengaluru, Karnataka",
-            "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Business%20Analyst%20PhonePe&location=Bengaluru%2C%20Karnataka",
-            "posted_at": "2 days ago",
-            "type": "Full-time",
-            "description": "Support the People & Operations team with workforce planning, recruitment metrics dashboards in Power BI and Advanced Excel. Bachelor of Business Administration (BBA) or Analytics background desired."
-        },
-        {
-            "title": "Talent Acquisition Associate",
-            "company": "Infosys",
-            "location": "Bengaluru, Karnataka",
-            "apply_url": "https://www.linkedin.com/jobs/search/?keywords=Talent%20Acquisition%20Infosys&location=Bengaluru%2C%20Karnataka",
-            "posted_at": "1 day ago",
-            "type": "Full-time",
-            "description": "Support full lifecycle hiring including sourcing, screening, scheduling, offer rollout, and onboarding operations across South India business units."
-        }
-    ]
-
-
-# ==============================================================================
-# 🎨 COLOR-CODED HTML EMAIL TEMPLATE
-# ==============================================================================
+# =============================================================================
+# HTML AND TEXT DIGEST
+# =============================================================================
 
 def get_company_initials(company: str) -> str:
-    """Generates a clean 2-letter monogram for company avatar."""
-    cleaned = re.sub(r"[^a-zA-Z0-9\s]", "", company or "").strip()
-    words = cleaned.split()
+    words = re.sub(r"[^a-zA-Z0-9\s]", "", company or "").strip().split()
     if len(words) >= 2:
         return (words[0][0] + words[1][0]).upper()
-    elif len(words) == 1 and len(words[0]) >= 2:
+    if words:
         return words[0][:2].upper()
-    elif len(words) == 1:
-        return words[0][0].upper()
     return "HR"
 
 
 def get_company_avatar(company: str) -> str:
-    """Renders a stylish company monogram avatar badge."""
-    initials = get_company_initials(company)
     palette = [
-        ("linear-gradient(135deg, #0284c7, #0369a1)", "#ffffff"),
-        ("linear-gradient(135deg, #7c3aed, #6d28d9)", "#ffffff"),
-        ("linear-gradient(135deg, #059669, #047857)", "#ffffff"),
-        ("linear-gradient(135deg, #db2777, #be185d)", "#ffffff"),
-        ("linear-gradient(135deg, #ea580c, #c2410c)", "#ffffff"),
-        ("linear-gradient(135deg, #0f172a, #334155)", "#ffffff"),
+        ("#0284c7", "#ffffff"), ("#7c3aed", "#ffffff"),
+        ("#059669", "#ffffff"), ("#db2777", "#ffffff"),
+        ("#ea580c", "#ffffff"), ("#334155", "#ffffff"),
     ]
-    idx = abs(hash((company or "").lower().strip())) % len(palette)
-    bg, text_color = palette[idx]
+    # Stable color assignment between runs.
+    idx = sum((i + 1) * ord(char) for i, char in enumerate(company.lower())) % len(palette)
+    bg, fg = palette[idx]
+    initials = html.escape(get_company_initials(company))
     return (
-        f'<div style="width:42px; height:42px; border-radius:10px; background:{bg}; color:{text_color}; '
-        f'font-size:14px; font-weight:800; text-align:center; line-height:42px; display:inline-block; '
-        f'vertical-align:middle; margin-right:12px; box-shadow:0 2px 6px rgba(0,0,0,0.1); letter-spacing:0.5px;">'
-        f'{initials}</div>'
+        f'<div style="width:42px;height:42px;border-radius:10px;background:{bg};'
+        f'color:{fg};font-size:14px;font-weight:800;text-align:center;'
+        f'line-height:42px;display:inline-block;vertical-align:middle;'
+        f'margin-right:12px;">{initials}</div>'
     )
 
 
 def generate_html_digest(ranked_jobs: list, spam_count: int, total_scraped: int) -> str:
-    """Builds a beautiful, responsive, aesthetic, color-coded HTML email digest tailored for Anosha."""
-    date_str = datetime.now().strftime("%A, %B %d, %Y")
+    date_str = datetime.now(IST).strftime("%A, %B %d, %Y")
+    cards = []
 
-    job_cards_html = ""
-    for idx, job in enumerate(ranked_jobs, start=1):
+    for index, job in enumerate(ranked_jobs, start=1):
         color = job["color_theme"]
-        avatar_html = get_company_avatar(job["company"])
-
-        top_tier_badge = ""
-        if job["is_top_tier"]:
-            top_tier_badge = """
-            <span style="display:inline-block; background:linear-gradient(135deg, #f59e0b, #d97706); color:#ffffff; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; text-transform:uppercase; margin-left:6px; letter-spacing:0.5px; box-shadow:0 2px 4px rgba(217, 119, 6, 0.2);">
-                ⭐ Top Employer (+30 pts)
-            </span>
-            """
-
-        fresh_badge = ""
-        if job["is_fresh"]:
-            fresh_badge = f"""
-            <span style="display:inline-block; background:#fee2e2; color:#b91c1c; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-left:6px; border:1px solid #fecaca;">
-                {job['recency_label']}
-            </span>
-            """
-
-        skills_pills = "".join(
-            f'<span style="display:inline-block; background:#f1f5f9; color:#1e293b; border:1px solid #e2e8f0; font-size:11px; font-weight:600; padding:3px 9px; border-radius:6px; margin:2px 4px 2px 0;">{s}</span>'
-            for s in job["matched_skills"]
-        ) if job["matched_skills"] else '<span style="color:#94a3b8; font-size:12px;">HR & Talent Acquisition</span>'
-
-        job_cards_html += f"""
-        <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:5px solid {color['border']}; border-radius:14px; padding:22px; margin-bottom:20px; box-shadow:0 4px 14px rgba(15, 23, 42, 0.04);">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; flex-wrap:wrap; gap:6px;">
-                <div>
-                    <span style="background:{color['badge_bg']}; color:#ffffff; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; display:inline-block; letter-spacing:0.3px;">
-                        🎯 #{idx} • {job['score']}% Match ({job['match_tier']})
-                    </span>
-                    {top_tier_badge}
-                    {fresh_badge}
-                </div>
-            </div>
-
-            <div style="display:flex; align-items:center; margin-bottom:10px;">
-                {avatar_html}
-                <div style="display:inline-block; vertical-align:middle;">
-                    <h2 style="margin:0; font-size:18px; font-weight:700; color:#0f172a; line-height:1.35;">
-                        {job['title']}
-                    </h2>
-                    <div style="color:#475569; font-size:13px; font-weight:600; margin-top:3px;">
-                        🏢 {job['company']} &nbsp;•&nbsp; 📍 {job['location']} &nbsp;•&nbsp; 💼 {job['type']}
-                    </div>
-                </div>
-            </div>
-
-            <p style="color:#334155; font-size:13px; line-height:1.6; margin:8px 0 14px 0;">
-                {job['description'][:260]}...
-            </p>
-
-            <div style="margin-bottom:16px;">
-                <span style="color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-right:6px; display:block; margin-bottom:6px;">Matching Skills & Keywords:</span>
-                {skills_pills}
-            </div>
-
-            <div style="text-align:right;">
-                <a href="{job['apply_url']}" target="_blank" style="background:linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); color:#ffffff; text-decoration:none; padding:10px 22px; border-radius:8px; font-size:13px; font-weight:700; display:inline-block; box-shadow:0 3px 8px rgba(15,23,42,0.18);">
-                    View & Apply on LinkedIn →
-                </a>
-            </div>
-        </div>
-        """
-
-    return f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Daily Career Match Digest</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    </head>
-    <body style="font-family:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color:#f1f5f9; margin:0; padding:28px 12px; color:#1e293b; -webkit-font-smoothing:antialiased;">
-        <div style="max-width:660px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 14px 38px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(226, 232, 240, 0.8);">
-            
-            <!-- Rainbow Gradient Accent Bar -->
-            <div style="height:5px; background:linear-gradient(90deg, #10b981 0%, #6366f1 50%, #ec4899 100%);"></div>
-
-            <!-- Header Banner -->
-            <div style="background:linear-gradient(135deg, #090d16 0%, #17153a 45%, #2e1065 100%); padding:36px 28px; color:#ffffff; text-align:center;">
-                <div style="display:inline-block; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); backdrop-filter:blur(8px); padding:4px 14px; border-radius:30px; font-size:11px; font-weight:700; color:#e0e7ff; letter-spacing:0.8px; text-transform:uppercase; margin-bottom:12px;">
-                    ⚡ DAILY EXECUTIVE BRIEFING • 8:00 PM IST
-                </div>
-                <h1 style="margin:0 0 6px 0; font-size:26px; font-weight:800; letter-spacing:-0.5px; line-height:1.2; color:#ffffff;">
-                    🎯 Daily Career Match Digest
-                </h1>
-                <p style="margin:0 0 16px 0; color:#cbd5e1; font-size:13px; font-weight:500;">
-                    {date_str} • Curated HR, Talent Acquisition & Business Opportunities
-                </p>
-                <div style="display:inline-block; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); padding:6px 16px; border-radius:30px; font-size:12px; color:#f8fafc;">
-                    👤 Exclusively Tailored for: <strong>Anosha Mariam Raji</strong> <span style="color:#a5b4fc; font-weight:600;">(BBA • Talent Acquisition)</span>
-                </div>
-            </div>
-
-            <!-- Stats Bar -->
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; text-align:center;">
-                <tr>
-                    <td style="padding:16px 8px; border-right:1px solid #e2e8f0; width:33.3%;">
-                        <div style="font-size:22px; font-weight:800; color:#0f172a; line-height:1.1;">{total_scraped}</div>
-                        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;">🌐 Roles Evaluated</div>
-                    </td>
-                    <td style="padding:16px 8px; border-right:1px solid #e2e8f0; width:33.3%;">
-                        <div style="font-size:22px; font-weight:800; color:#059669; line-height:1.1;">100% Clean</div>
-                        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;">🛡️ {spam_count} Spam Filtered</div>
-                    </td>
-                    <td style="padding:16px 8px; width:33.3%;">
-                        <div style="font-size:22px; font-weight:800; color:#4f46e5; line-height:1.1;">{len(ranked_jobs)}</div>
-                        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:4px;">⭐ Prime Matches</div>
-                    </td>
-                </tr>
-            </table>
-
-            <!-- Main Container -->
-            <div style="padding:28px 24px;">
-                
-                <!-- Personalized Welcome Card -->
-                <div style="background:linear-gradient(135deg, #f8faff 0%, #eef2ff 100%); border:1px solid #c7d2fe; border-radius:16px; padding:22px 24px; margin-bottom:24px; box-shadow:0 4px 14px rgba(99, 102, 241, 0.06);">
-                    <div style="font-size:17px; font-weight:800; color:#1e1b4b; margin-bottom:8px;">
-                        ✨ Hello Anosha!, Sugam ale.... 👋
-                    </div>
-                    <p style="font-size:14px; color:#334155; line-height:1.65; margin:0 0 14px 0;">
-                        Good evening! Here are today's top matching <strong>HR, Talent Acquisition, Campus Hiring, and Business Operations</strong> roles in <strong>Bengaluru</strong>.
-                        All spam recruitment companies were strictly filtered out, and roles matching your <strong>BBA degree, Naukri sourcing, LeadSquared CRM, and candidate interview coordination</strong> experience received top priority.
-                    </p>
-                    <div style="margin-bottom:14px;">
-                        <span style="display:inline-block; background:rgba(99, 102, 241, 0.1); color:#4338ca; border:1px solid rgba(99, 102, 241, 0.2); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-right:6px; margin-bottom:4px;">🎯 Focus: HR & Talent Acquisition</span>
-                        <span style="display:inline-block; background:rgba(16, 185, 129, 0.1); color:#047857; border:1px solid rgba(16, 185, 129, 0.2); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-right:6px; margin-bottom:4px;">📍 Location: Bengaluru, Karnataka</span>
-                        <span style="display:inline-block; background:rgba(245, 158, 11, 0.1); color:#b45309; border:1px solid rgba(245, 158, 11, 0.2); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; margin-bottom:4px;">⚡ Status: Verified Live (<24h)</span>
-                    </div>
-                    <div style="font-size:12px; color:#475569; font-weight:600; border-top:1px dashed #c7d2fe; padding-top:10px;">
-                        Curated by <strong>Albi Aju</strong>
-                    </div>
-                </div>
-
-                <!-- Job Listings -->
-                {job_cards_html}
-
-                <!-- Motivation / Pro-Tip Box -->
-                <div style="background:#f8fafc; border:1px solid #e2e8f0; border-left:4px solid #6366f1; padding:16px 20px; border-radius:0 12px 12px 0; margin-top:24px; font-size:13px; color:#475569; line-height:1.6;">
-                    <div style="font-weight:700; color:#1e1b4b; margin-bottom:4px; font-size:14px;">
-                        💡 Recruiter Strategy Tip for Anosha
-                    </div>
-                    As an HR professional, highlight your metrics: candidate response rate on LinkedIn & Naukri, time-to-hire, and CRM proficiency on LeadSquared. Applications submitted in the evening receive maximum recruiter visibility the following morning!
-                </div>
-            </div>
-
-            <!-- Footer -->
-            <div style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:24px; text-align:center; font-size:13px; color:#475569; line-height:1.6;">
-                <div style="font-size:14px; font-weight:700; color:#0f172a; margin-bottom:4px;">
-                    Crafted for Anosha by <strong>Albi Aju</strong>
-                </div>
-                <div style="font-size:12px; color:#64748b; margin-bottom:8px;">
-                    Automated Daily Career Digest • Scheduled daily at 8:00 PM IST
-                </div>
-                <div style="font-size:11px; color:#94a3b8;">
-                    Powered by Python & GitHub Actions • Real-time LinkedIn Scraper • Zero Spam Guarantee
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-
-
-def generate_text_digest(ranked_jobs: list, spam_count: int, total_scraped: int) -> str:
-    """Builds a fallback plaintext version of the morning digest."""
-    date_str = datetime.now().strftime("%A, %B %d, %Y")
-    lines = [
-        f"🎯 DAILY CAREER DIGEST - {date_str}",
-        "Tailored for Anosha Mariam (BBA • HR Talent Acquisition)",
-        "=" * 60,
-        f"Roles Evaluated: {total_scraped} | Spam Filtered: {spam_count} | Top Matches: {len(ranked_jobs)}",
-        "=" * 60,
-        ""
-    ]
-
-    for idx, job in enumerate(ranked_jobs, start=1):
-        tier_tag = " [TOP EMPLOYER]" if job["is_top_tier"] else ""
-        fresh_tag = " [FRESH <24H]" if job["is_fresh"] else ""
-        lines.append(f"#{idx}. {job['title']} at {job['company']}{tier_tag}{fresh_tag}")
-        lines.append(f"    Match Score: {job['score']}% ({job['match_tier']})")
-        lines.append(f"    Location: {job['location']} | Type: {job['type']}")
-        lines.append(f"    Matching Skills: {', '.join(job['matched_skills']) or 'N/A'}")
-        lines.append(f"    Apply Link: {job['apply_url']}")
-        lines.append("-" * 60)
-
-    lines.append("\nTip: Tailor your application by highlighting your LeadSquared CRM, campus hiring, and Naukri sourcing expertise!")
-    lines.append("Crafted for Anosha by Albi Aju • Automated Daily Career Digest")
-    return "\n".join(lines)
-
-
-# ==============================================================================
-# ✉️ GMAIL API & DISPATCH SERVICE
-# ==============================================================================
-
-def get_gmail_service():
-    """Initializes and returns an authorized Google Gmail API service resource."""
-    try:
-        from google.auth.transport.requests import Request
-        from google.oauth2.credentials import Credentials
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        from googleapiclient.discovery import build
-    except ImportError:
-        return None
-
-    SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-    creds = None
-
-    # Check for inlined token from GitHub Actions Secrets
-    env_token = os.getenv("GMAIL_TOKEN_JSON")
-    if env_token:
-        try:
-            token_data = json.loads(env_token)
-            creds = Credentials.from_authorized_user_info(token_data, SCOPES)
-        except Exception as e:
-            print(f"[⚠️] Failed to parse GMAIL_TOKEN_JSON secret: {e}")
-
-    # Check local token.json
-    if not creds and os.path.exists(GMAIL_TOKEN_FILE):
-        try:
-            creds = Credentials.from_authorized_user_file(GMAIL_TOKEN_FILE, SCOPES)
-        except Exception as e:
-            print(f"[⚠️] Failed to read {GMAIL_TOKEN_FILE}: {e}")
-
-    # Refresh token if expired
-    if creds and creds.expired and creds.refresh_token:
-        try:
-            creds.refresh(Request())
-            with open(GMAIL_TOKEN_FILE, "w") as f:
-                f.write(creds.to_json())
-        except Exception as e:
-            print(f"[⚠️] Token refresh failed: {e}")
-            creds = None
-
-    # If in headless CI environment (GitHub Actions), do not attempt interactive browser flow
-    if not creds:
-        if os.getenv("CI") or not sys.stdin.isatty():
-            return None
-
-        client_config = None
-        env_creds = os.getenv("GMAIL_CREDENTIALS_JSON")
-        if env_creds:
-            try:
-                client_config = json.loads(env_creds)
-            except Exception:
-                pass
-
-        if client_config:
-            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
-            creds = flow.run_local_server(port=0)
-        elif os.path.exists(GMAIL_CREDENTIALS_FILE):
-            print(f"[🔐] Authenticating with Gmail API using {GMAIL_CREDENTIALS_FILE}...")
-            flow = InstalledAppFlow.from_client_secrets_file(GMAIL_CREDENTIALS_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        else:
-            return None
-
-        try:
-            with open(GMAIL_TOKEN_FILE, "w") as token_out:
-                token_out.write(creds.to_json())
-            print(f"[💾] Saved authorized token to {GMAIL_TOKEN_FILE}")
-        except Exception as e:
-            print(f"[⚠️] Could not save {GMAIL_TOKEN_FILE}: {e}")
-
-    return build("gmail", "v1", credentials=creds)
-
-
-def send_via_gmail_api(service, sender: str, recipient: str, subject: str, html_body: str, text_body: str) -> bool:
-    """Sends an email using the authorized Gmail API service."""
-    message = MIMEMultipart("alternative")
-    message["From"] = sender
-    message["To"] = recipient
-    message["Subject"] = subject
-
-    part_text = MIMEText(text_body, "plain")
-    part_html = MIMEText(html_body, "html")
-    message.attach(part_text)
-    message.attach(part_html)
-
-    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
-    try:
-        service.users().messages().send(userId="me", body={"raw": raw_message}).execute()
-        print(f"[📬] Successfully sent morning digest via Gmail API to {recipient}")
-        return True
-    except Exception as exc:
-        print(f"[❌] Gmail API send error: {exc}")
-        return False
-
-
-def send_via_smtp(sender: str, recipient: str, subject: str, html_body: str, text_body: str) -> bool:
-    """Fallback email dispatcher using SMTP with Gmail App Password."""
-    smtp_server = (os.getenv("SMTP_SERVER") or "").strip() or "smtp.gmail.com"
-    raw_port = (os.getenv("SMTP_PORT") or "").strip() or "587"
-    try:
-        smtp_port = int(raw_port)
-    except (ValueError, TypeError):
-        smtp_port = 587
-
-    raw_password = (os.getenv("MAIL_PASSWORD") or "").strip()
-    if not raw_password:
-        print("[ℹ️] No MAIL_PASSWORD configured for SMTP fallback.")
-        return False
-
-    message = MIMEMultipart("alternative")
-    message["From"] = sender
-    message["To"] = recipient
-    message["Subject"] = subject
-    message.attach(MIMEText(text_body, "plain"))
-    message.attach(MIMEText(html_body, "html"))
-
-    # Gmail App passwords may be provided with or without spaces
-    clean_password = raw_password.replace(" ", "")
-    passwords_to_try = [clean_password] if clean_password == raw_password else [clean_password, raw_password]
-
-    for pwd in passwords_to_try:
-        try:
-            with smtplib.SMTP(smtp_server, smtp_port, timeout=30) as server:
-                server.ehlo()
-                server.starttls()
-                server.ehlo()
-                server.login(sender, pwd)
-                server.send_message(message)
-            print(f"[📬] Successfully sent morning digest via SMTP to {recipient}")
-            return True
-        except Exception as exc:
-            print(f"[⚠️] SMTP attempt notice: {exc}")
-
-    print("[❌] All SMTP delivery attempts failed. Check sender email and Gmail App Password.")
-    return False
-
-
-def dispatch_email(subject: str, html_body: str, text_body: str) -> bool:
-    """Dispatches email via Gmail API or SMTP fallback."""
-    print(f"[📧] Preparing to send digest from {SENDER_EMAIL} to {RECIPIENT_EMAIL}...")
-
-    # 1. Try Gmail API
-    gmail_service = get_gmail_service()
-    if gmail_service:
-        success = send_via_gmail_api(gmail_service, SENDER_EMAIL, RECIPIENT_EMAIL, subject, html_body, text_body)
-        if success:
-            return True
-        print("[⚠️] Gmail API delivery failed. Trying SMTP fallback...")
-
-    # 2. Try SMTP fallback
-    if os.getenv("MAIL_PASSWORD"):
-        print("[🔄] Attempting SMTP fallback using MAIL_PASSWORD...")
-        success = send_via_smtp(SENDER_EMAIL, RECIPIENT_EMAIL, subject, html_body, text_body)
-        if success:
-            return True
-
-    print("[ℹ️] Neither Gmail API credentials nor SMTP password configured.")
-    return False
-
-
-# ==============================================================================
-# 🚀 CORE PIPELINE
-# ==============================================================================
-
-def run_scraper_pipeline(dry_run: bool = False) -> list:
-    """Full pipeline: scrape -> filter spam -> score for Anosha's profile -> generate digest -> email."""
-    print("=" * 65)
-    print("🎯 DAILY CAREER DIGEST: HR, Talent Acquisition & Business Pipeline")
-    print(f"🕒 Run Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 65)
-
-    # 1. Fetch raw jobs
-    raw_jobs = fetch_jobs_from_apify()
-    total_scraped = len(raw_jobs)
-    print(f"[🔍] Evaluating {total_scraped} job postings...")
-
-    # 2. Filter spam
-    clean_jobs = []
-    spam_jobs = []
-    for job in raw_jobs:
-        company = job.get("company", "")
-        if is_blacklisted(company):
-            spam_jobs.append(job)
-        else:
-            clean_jobs.append(job)
-
-    spam_count = len(spam_jobs)
-    print(f"[🛡️] Spam filter eliminated {spam_count} postings.")
-    if spam_jobs:
-        blocked_names = {j.get("company") for j in spam_jobs}
-        print(f"     Blocked companies: {', '.join(filter(None, blocked_names))}")
-
-    # 3. Smart Scoring for Anosha's Profile
-    ranked_jobs = [score_job(j) for j in clean_jobs]
-    ranked_jobs.sort(key=lambda x: x["score"], reverse=True)
-
-    # Select top matches (up to 10)
-    top_matches = ranked_jobs[:10]
-    print(f"[🏆] Ranked top {len(top_matches)} matches for Anosha:")
-    for idx, j in enumerate(top_matches[:4], start=1):
-        bonus_mark = " (Top Employer ⭐)" if j["is_top_tier"] else ""
-        print(f"     #{idx}: {j['title']} at {j['company']}{bonus_mark} - Score: {j['score']}%")
-
-    # 4. Generate Digest
-    subject = f"🎯 Daily Career Digest: {len(top_matches)} Curated HR & Talent Roles ({datetime.now().strftime('%b %d')})"
-    html_content = generate_html_digest(top_matches, spam_count, total_scraped)
-    text_content = generate_text_digest(top_matches, spam_count, total_scraped)
-
-    # 5. Output / Send
-    preview_file = Path("daily_jobs_preview.html")
-    preview_file.write_text(html_content, encoding="utf-8")
-    print(f"[📄] Saved HTML digest preview to: {preview_file.resolve()}")
-
-    if dry_run:
-        print("[✨] Dry run complete. Email sending skipped.")
-        return top_matches
-
-    dispatch_email(subject, html_content, text_content)
-    return top_matches
-
-
-# ==============================================================================
-# ⏰ SCHEDULER & CLI ENTRY POINT
-# ==============================================================================
-
-def main():
-    parser = argparse.ArgumentParser(description="Daily Job Scraper - HR & Talent Acquisition")
-    parser.add_argument("--now", action="store_true", help="Run scrape, ranking, and email immediately once")
-    parser.add_argument("--dry-run", action="store_true", help="Scrape and generate preview without sending email")
-    parser.add_argument("--schedule", action="store_true", help="Run continuous scheduler at configured morning time")
-    args = parser.parse_args()
-
-    if args.now or args.dry_run:
-        run_scraper_pipeline(dry_run=args.dry_run)
-        return
-
-    try:
-        import schedule
-    except ImportError:
-        run_scraper_pipeline()
-        return
-
-    print(f"[⏰] Daily Job Scraper daemon active. Scheduled daily at {DAILY_TIME_IST} IST.")
-    print("     To run immediately once, execute: python send_daily_jobs.py --now")
-    print("     To preview HTML output only, execute: python send_daily_jobs.py --dry-run")
-    print("     Press Ctrl+C to stop.\n")
-
-    schedule.every().day.at(DAILY_TIME_IST).do(run_scraper_pipeline)
-
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
-
-
-if __name__ == "__main__":
-    main()
+        top_badge = (
+            '<span style="display:inline-block;background:#d97706;color:#fff;'
+            'font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;">'
+            '⭐ Top Employer</span>'
+            if job["is_top_tier"] else ""
+        )
+        fresh_badge = (
+            '<span style="display:inline-block;background:#fee2e2;color:#b91c1c;'
+            'font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;">'
+            f'{html.escape(job["recency_label"])}</span>'
+            if job["is_fresh"] else ""
+        )
+        skills = "".join(
+            '<span style="display:inline-block;background:#f1f5f9;color:#1e293b;'
+            'border:1px solid #e2e8f0;font-size:11px;font-weight:600;'
+            'padding:3px 8px;border-radius:6px;margin:2px 4px 2px 0;">'
+            f'{html.escape(skill)}</span>'
+            for skill in job["matched_skills"]
+        ) or '<span style="color:#64748b;font-size:12px;">No specific skills verified</span>'
+
+        description = (job.get("description") or "").strip()
+        if not description:
+            description = "Open the original listing to review the full responsibilities and requirements."
+        elif len(description) > 260:
+            description = description[:260].rstrip() + "…"
+
+        safe_title = html.escape(job["title"])
+        safe_company = html.escape(job["company"])
+        safe_location = html.escape(job["location"])
+        safe_type = html.escape(job["type"])
+        safe_description = html.escape(description)
+        safe_url = html.escape(job["apply_url"], quote=True)
+
+        cards.append(f"""
+        <div style="background:#fff;border:1px solid #e2e8f0;border-left:5px solid {color['border']};
+        border-radius:14px;padding:20px;margin-bottom:18px;">
+          <div style="margin-bottom:12px;">
+            <span style="background:{color['badge_bg']};color:#fff;font-size
