@@ -427,7 +427,7 @@ def fetch_jobs_from_apify(token: str = None) -> list:
                 "limitPerSource": 15,
             }
             run = client.actor(APIFY_ACTOR_ID).call(
-                run_input=run_input, timeout_secs=120
+                run_input=run_input
             )
             items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
             for item in items:
